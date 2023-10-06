@@ -1,7 +1,9 @@
+use std::future::poll_fn;
 use std::mem::ManuallyDrop;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
+use std::task::Poll;
 
 use color_eyre::eyre::{Report, Result};
 use data_encoding::HEXUPPER;
@@ -38,6 +40,7 @@ use crate::facade::tendermint_proto::abci::{
 use crate::facade::tendermint_rpc::endpoint::abci_info::AbciInfo;
 use crate::facade::tendermint_rpc::error::Error as RpcError;
 use crate::facade::{tendermint, tendermint_rpc};
+use crate::node::ledger::ethereum_oracle::try_process_eth_events;
 use crate::node::ledger::shell::testing::utils::TestDir;
 use crate::node::ledger::shell::{ErrorCodes, Shell};
 use crate::node::ledger::shims::abcipp_shim_types::shim::request::{
@@ -45,6 +48,77 @@ use crate::node::ledger::shims::abcipp_shim_types::shim::request::{
 };
 use crate::node::ledger::shims::abcipp_shim_types::shim::response::TxResult;
 use crate::node::ledger::storage;
+
+/// Services mocking the operation of the ledger's various async tasks.
+pub struct MockServices {
+    /// Whether to automatically drive the shell's background
+    /// services or not.
+    pub auto: bool,
+    /// Receives transactions that are supposed to be broadcasted
+    /// to the network.
+    pub tx_receiver: UnboundedReceiver<Vec<u8>>,
+    /// Mock Ethereum oracle, that processes blocks from Ethereum
+    /// in order to find events emitted by a transaction to vote on.
+    pub ethereum_oracle: MockEthOracle,
+}
+
+/// Actions to be performed by the mock node, as a result
+/// of driving [`MockServices`].
+pub enum MockServiceAction {
+    /// The ledger should broadcast a new transaction.
+    BroadcastTx(Vec<u8>),
+}
+
+impl MockServices {
+    pub async fn drive(&mut self) -> Vec<MockServiceAction> {
+        let mut actions = vec![];
+
+        // process new eth events
+        self.ethereum_oracle.step().await;
+
+        // receive txs from the broadcaster
+        while let Some(tx) =
+            poll_fn(|cx| match self.tx_receiver.poll_recv(cx) {
+                Poll::Pending => Poll::Ready(None),
+                poll => poll,
+            })
+            .await
+        {
+            actions.push(MockServiceAction::BroadcastTx(tx));
+        }
+
+        actions
+    }
+}
+
+/// Mock Ethereum oracle used for testing purposes.
+pub struct MockEthOracle<C> {
+    pub oracle: Oracle<C>,
+    pub config: Config,
+    pub next_block_to_process: ethereum_structs::BlockHeight,
+}
+
+impl<C: RpcClient> MockEthOracle<C> {
+    /// Updates the state of the Ethereum oracle.
+    ///
+    /// This includes sending any confirmed Ethereum events to
+    /// the shell and updating the height of the next Ethereum
+    /// block to process. Upon a successfully processed block,
+    /// this functions returns `true`.
+    pub async fn step(&self) -> bool {
+        let ok = try_process_eth_events(
+            &self.oracle,
+            &self.config,
+            &self.next_block_to_process,
+        )
+        .await
+        .is_great_success();
+        if ok {
+            self.next_block_to_process += 1.into();
+        }
+        ok
+    }
+}
 
 /// Status of tx
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,8 +135,8 @@ pub struct MockNode {
     pub shell: Arc<Mutex<Shell<storage::PersistentDB, Sha256Hasher>>>,
     pub test_dir: ManuallyDrop<TestDir>,
     pub keep_temp: bool,
-    pub _broadcast_recv: UnboundedReceiver<Vec<u8>>,
     pub results: Arc<Mutex<Vec<NodeResults>>>,
+    pub services: Arc<Mutex<MockServices>>,
 }
 
 impl Drop for MockNode {
@@ -82,6 +156,31 @@ impl Drop for MockNode {
 }
 
 impl MockNode {
+    pub async fn set_auto_mock_services(&self, auto: bool) {
+        self.services.lock().unwrap().auto = auto;
+    }
+
+    pub async fn handle_service_action(action: MockServiceAction) {
+        match action {
+            MockServiceAction::BroadcastTx(tx) => {
+                _ = self.broadcast_tx_sync(tx).await;
+            }
+        }
+    }
+
+    async fn drive_mock_services(&self) {
+        let mut services = self.services.lock();
+
+        if services.auto {
+            let actions = services.drive().await;
+            drop(services);
+
+            for action in actions {
+                self.handle_service_action(action).await;
+            }
+        }
+    }
+
     pub fn genesis_dir(&self) -> PathBuf {
         self.test_dir
             .path()
@@ -310,6 +409,7 @@ impl MockNode {
     }
 }
 
+// TODO: drive mock services
 #[cfg_attr(feature = "async-send", async_trait::async_trait)]
 #[cfg_attr(not(feature = "async-send"), async_trait::async_trait(?Send))]
 impl<'a> Client for &'a MockNode {
