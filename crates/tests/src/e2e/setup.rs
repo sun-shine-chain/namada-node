@@ -177,7 +177,6 @@ where
         let validator_address = {
             use namada_apps::config::genesis::chain::DeriveEstablishedAddress;
             let pre_genesis_tx = transactions::EstablishedAccountTx {
-                vp: "vp_user".to_string(),
                 threshold: 1,
                 public_keys: vec![StringEncoded::new(sk.ref_to())],
             };
@@ -1230,7 +1229,7 @@ where
 #[allow(dead_code)]
 pub mod constants {
     // Paths to the WASMs used for tests
-    pub use namada_sdk::tx::{TX_IBC_WASM, TX_TRANSFER_WASM, VP_USER_WASM};
+    pub use namada_sdk::tx::{TX_IBC_WASM, TX_TRANSFER_WASM};
 
     // User addresses aliases
     pub const ALBERT: &str = "Albert";

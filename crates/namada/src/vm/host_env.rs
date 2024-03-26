@@ -1430,63 +1430,9 @@ where
     Ok(())
 }
 
-/// Update a validity predicate function exposed to the wasm VM Tx environment
-pub fn tx_update_validity_predicate<MEM, D, H, CA>(
-    env: &TxVmEnv<MEM, D, H, CA>,
-    addr_ptr: u64,
-    addr_len: u64,
-    code_hash_ptr: u64,
-    code_hash_len: u64,
-    code_tag_ptr: u64,
-    code_tag_len: u64,
-) -> TxResult<()>
-where
-    MEM: VmMemory,
-    D: 'static + DB + for<'iter> DBIter<'iter>,
-    H: 'static + StorageHasher,
-    CA: WasmCacheAccess,
-{
-    let (addr, gas) = env
-        .memory
-        .read_string(addr_ptr, addr_len as _)
-        .map_err(|e| TxRuntimeError::MemoryError(Box::new(e)))?;
-    tx_charge_gas::<MEM, D, H, CA>(env, gas)?;
-
-    let addr = Address::decode(addr).map_err(TxRuntimeError::AddressError)?;
-    tracing::debug!("tx_update_validity_predicate for addr {}", addr);
-
-    let (code_tag, gas) = env
-        .memory
-        .read_bytes(code_tag_ptr, code_tag_len as _)
-        .map_err(|e| TxRuntimeError::MemoryError(Box::new(e)))?;
-    tx_charge_gas::<MEM, D, H, CA>(env, gas)?;
-    let code_tag = Option::<String>::try_from_slice(&code_tag)
-        .map_err(TxRuntimeError::EncodingError)?;
-
-    let key = Key::validity_predicate(&addr);
-    let (code_hash, gas) = env
-        .memory
-        .read_bytes(code_hash_ptr, code_hash_len as _)
-        .map_err(|e| TxRuntimeError::MemoryError(Box::new(e)))?;
-    tx_charge_gas::<MEM, D, H, CA>(env, gas)?;
-
-    tx_validate_vp_code_hash::<MEM, D, H, CA>(env, &code_hash, &code_tag)?;
-
-    let mut state = env.state();
-    let (gas, _size_diff) = state
-        .write_log_mut()
-        .write(&key, code_hash)
-        .map_err(TxRuntimeError::StorageModificationError)?;
-    tx_charge_gas::<MEM, D, H, CA>(env, gas)
-}
-
 /// Initialize a new account established address.
 pub fn tx_init_account<MEM, D, H, CA>(
     env: &TxVmEnv<MEM, D, H, CA>,
-    code_hash_ptr: u64,
-    code_hash_len: u64,
-    code_tag_ptr: u64,
-    code_tag_len: u64,
     result_ptr: u64,
 ) -> TxResult<()>
 where
@@ -1495,29 +1441,22 @@ where
     H: 'static + StorageHasher,
     CA: WasmCacheAccess,
 {
-    let (code_hash, gas) = env
-        .memory
-        .read_bytes(code_hash_ptr, code_hash_len as _)
-        .map_err(|e| TxRuntimeError::MemoryError(Box::new(e)))?;
-    tx_charge_gas::<MEM, D, H, CA>(env, gas)?;
-
-    let (code_tag, gas) = env
-        .memory
-        .read_bytes(code_tag_ptr, code_tag_len as _)
-        .map_err(|e| TxRuntimeError::MemoryError(Box::new(e)))?;
-    tx_charge_gas::<MEM, D, H, CA>(env, gas)?;
-    let code_tag = Option::<String>::try_from_slice(&code_tag)
-        .map_err(TxRuntimeError::EncodingError)?;
-
-    tx_validate_vp_code_hash::<MEM, D, H, CA>(env, &code_hash, &code_tag)?;
-
     tracing::debug!("tx_init_account");
 
-    let code_hash = Hash::try_from(&code_hash[..])
-        .map_err(|e| TxRuntimeError::InvalidVpCodeHash(e.to_string()))?;
     let mut state = env.state();
+    let hash_key = Key::wasm_hash("vp_user.wasm");
+    let (vp_hash, gas) = state
+        .db_read(&hash_key)
+        .map_err(TxRuntimeError::StateError)?;
+    tx_charge_gas::<MEM, D, H, CA>(env, gas)?;
     let (write_log, in_mem, _db) = state.split_borrow();
     let gen = &in_mem.address_gen;
+    let code_hash = Hash::try_from(
+        &vp_hash.ok_or(TxRuntimeError::StorageError(
+            StorageError::SimpleMessage("Missing hash of vp_user in storage"),
+        ))?[..],
+    )
+    .map_err(|e| TxRuntimeError::InvalidVpCodeHash(e.to_string()))?;
     let (addr, gas) = write_log.init_account(gen, code_hash);
     let addr_bytes = addr.serialize_to_vec();
     tx_charge_gas::<MEM, D, H, CA>(env, gas)?;

@@ -147,6 +147,7 @@ where
             let chain_dir = self.base_dir.join(chain_id);
             genesis::make_dev_genesis(_num_validators, &chain_dir)
         };
+
         #[cfg(all(
             any(test, feature = "benches"),
             not(feature = "integration")
@@ -553,7 +554,6 @@ where
                 address,
                 tx:
                     EstablishedAccountTx {
-                        vp,
                         threshold,
                         public_keys,
                     },
@@ -563,7 +563,7 @@ where
                     "Applying genesis tx to init an established account \
                      {address}"
                 );
-                let vp_code = self.lookup_vp(vp, genesis, vp_cache)?;
+                let vp_code = self.lookup_vp("vp_user", genesis, vp_cache)?;
                 let code_hash = CodeHash::sha256(&vp_code);
                 self.state
                     .write_bytes(&Key::validity_predicate(address), code_hash)
@@ -598,7 +598,6 @@ where
                         data:
                             ValidatorAccountTx {
                                 address,
-                                vp,
                                 commission_rate,
                                 max_commission_rate_change,
                                 metadata,
@@ -620,7 +619,7 @@ where
                     "Applying genesis tx to init a validator account {address}"
                 );
 
-                let vp_code = self.lookup_vp(vp, genesis, vp_cache)?;
+                let vp_code = self.lookup_vp("vp_user", genesis, vp_cache)?;
                 let code_hash = CodeHash::sha256(&vp_code);
                 self.state
                     .write_bytes(&Key::validity_predicate(address), code_hash)

@@ -50,7 +50,6 @@ use namada_apps::bench_utils::{
     VP_USER_WASM,
 };
 use namada_apps::wallet::defaults;
-use sha2::Digest;
 
 fn transfer(c: &mut Criterion) {
     let mut group = c.benchmark_group("transfer");
@@ -365,21 +364,8 @@ fn reveal_pk(c: &mut Criterion) {
 
 fn update_account(c: &mut Criterion) {
     let shell = BenchShell::default();
-    let vp_code_hash: Hash = shell
-        .read_storage_key(&Key::wasm_hash(VP_USER_WASM))
-        .unwrap();
-    let extra_section = Section::ExtraData(Code::from_hash(
-        vp_code_hash,
-        Some(VP_USER_WASM.to_string()),
-    ));
     let data = UpdateAccount {
         addr: defaults::albert_address(),
-        vp_code_hash: Some(Hash(
-            extra_section
-                .hash(&mut sha2::Sha256::new())
-                .finalize_reset()
-                .into(),
-        )),
         public_keys: vec![defaults::albert_keypair().ref_to()],
         threshold: None,
     };
@@ -387,7 +373,7 @@ fn update_account(c: &mut Criterion) {
         TX_UPDATE_ACCOUNT_WASM,
         data,
         None,
-        Some(vec![extra_section]),
+        None,
         vec![&defaults::albert_keypair()],
     );
 
@@ -415,15 +401,8 @@ fn init_account(c: &mut Criterion) {
         vp_code_hash,
         Some(VP_USER_WASM.to_string()),
     ));
-    let extra_hash = Hash(
-        extra_section
-            .hash(&mut sha2::Sha256::new())
-            .finalize_reset()
-            .into(),
-    );
     let data = InitAccount {
         public_keys: vec![new_account.to_public()],
-        vp_code_hash: extra_hash,
         threshold: 1,
     };
     let tx = shell.generate_tx(

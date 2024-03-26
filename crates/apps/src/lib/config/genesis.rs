@@ -198,10 +198,6 @@ pub struct Validator {
     /// These tokens are not staked and hence do not contribute to the
     /// validator's voting power
     pub non_staked_balance: token::Amount,
-    /// Validity predicate code WASM
-    pub validator_vp_code_path: String,
-    /// Expected SHA-256 hash of the validator VP
-    pub validator_vp_sha256: [u8; 32],
 }
 
 #[derive(
@@ -218,10 +214,6 @@ pub struct Validator {
 pub struct EstablishedAccount {
     /// Address
     pub address: Address,
-    /// Validity predicate code WASM
-    pub vp_code_path: String,
-    /// Expected SHA-256 hash of the validity predicate wasm
-    pub vp_sha256: [u8; 32],
     /// A public key to be stored in the account's storage, if any
     pub public_key: Option<common::PublicKey>,
     /// Account's sub-space storage. The values must be borsh encoded bytes.
@@ -467,7 +459,6 @@ pub fn make_dev_genesis(
                 genesis.transactions.established_account.as_mut().unwrap();
 
             let tx = transactions::EstablishedAccountTx {
-                vp: utils::VP_USER.to_string(),
                 public_keys: vec![StringEncoded::new(
                     consensus_keypair.ref_to(),
                 )],
@@ -482,7 +473,6 @@ pub fn make_dev_genesis(
 
             let validator_account_tx = transactions::ValidatorAccountTx {
                 address: StringEncoded::new(address.clone()),
-                vp: utils::VP_USER.to_string(),
                 commission_rate: Dec::new(5, 2).expect("This can't fail"),
                 max_commission_rate_change: Dec::new(1, 2)
                     .expect("This can't fail"),
@@ -517,7 +507,6 @@ pub fn make_dev_genesis(
                 tx: transactions::Signed::new(
                     transactions::ValidatorAccountTx {
                         address: StringEncoded::new(address.clone()),
-                        vp: validator_account_tx.vp,
                         commission_rate: validator_account_tx.commission_rate,
                         max_commission_rate_change: validator_account_tx
                             .max_commission_rate_change,

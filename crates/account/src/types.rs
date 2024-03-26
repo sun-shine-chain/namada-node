@@ -1,6 +1,5 @@
 use namada_core::address::Address;
 use namada_core::borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
-use namada_core::hash::Hash;
 use namada_core::key::common;
 use namada_macros::BorshDeserializer;
 #[cfg(feature = "migrations")]
@@ -24,13 +23,11 @@ pub struct InitAccount {
     /// for signature verification of transactions for the newly created
     /// account.
     pub public_keys: Vec<common::PublicKey>,
-    /// The VP code hash
-    pub vp_code_hash: Hash,
     /// The account signature threshold
     pub threshold: u8,
 }
 
-/// A tx data type to update an account's validity predicate
+/// A tx data type to update an account's signature threshold and keys
 #[derive(
     Debug,
     Clone,
@@ -45,8 +42,6 @@ pub struct InitAccount {
 pub struct UpdateAccount {
     /// An address of the account
     pub addr: Address,
-    /// The new VP code hash
-    pub vp_code_hash: Option<Hash>,
     /// Public keys to be written into the account's storage. This can be used
     /// for signature verification of transactions for the newly created
     /// account.
@@ -59,7 +54,6 @@ pub struct UpdateAccount {
 /// Tests and strategies for accounts
 pub mod tests {
     use namada_core::address::testing::arb_non_internal_address;
-    use namada_core::hash::testing::arb_hash;
     use namada_core::key::testing::arb_common_pk;
     use proptest::prelude::Just;
     use proptest::{collection, option, prop_compose};
@@ -73,11 +67,9 @@ pub mod tests {
         )(
             threshold in 0..=public_keys.len() as u8,
             public_keys in Just(public_keys),
-            vp_code_hash in arb_hash(),
         ) -> InitAccount {
             InitAccount {
                 public_keys,
-                vp_code_hash,
                 threshold,
             }
         }
@@ -89,13 +81,11 @@ pub mod tests {
             public_keys in collection::vec(arb_common_pk(), 0..10),
         )(
             addr in arb_non_internal_address(),
-            vp_code_hash in option::of(arb_hash()),
             threshold in option::of(0..=public_keys.len() as u8),
             public_keys in Just(public_keys),
         ) -> UpdateAccount {
             UpdateAccount {
                 addr,
-                vp_code_hash,
                 public_keys,
                 threshold,
             }

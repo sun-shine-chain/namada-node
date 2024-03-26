@@ -286,23 +286,9 @@ impl TxEnv for Ctx {
         Ok(())
     }
 
-    fn init_account(
-        &mut self,
-        code_hash: impl AsRef<[u8]>,
-        code_tag: &Option<String>,
-    ) -> Result<Address, Error> {
-        let code_hash = code_hash.as_ref();
-        let code_tag = code_tag.serialize_to_vec();
+    fn init_account(&mut self) -> Result<Address, Error> {
         let result = Vec::with_capacity(address::ESTABLISHED_ADDRESS_BYTES_LEN);
-        unsafe {
-            namada_tx_init_account(
-                code_hash.as_ptr() as _,
-                code_hash.len() as _,
-                code_tag.as_ptr() as _,
-                code_tag.len() as _,
-                result.as_ptr() as _,
-            )
-        };
+        unsafe { namada_tx_init_account(result.as_ptr() as _) };
         let slice = unsafe {
             slice::from_raw_parts(
                 result.as_ptr(),
@@ -311,28 +297,6 @@ impl TxEnv for Ctx {
         };
         Ok(Address::try_from_slice(slice)
             .expect("Decoding address created by the ledger shouldn't fail"))
-    }
-
-    fn update_validity_predicate(
-        &mut self,
-        addr: &Address,
-        code_hash: impl AsRef<[u8]>,
-        code_tag: &Option<String>,
-    ) -> Result<(), Error> {
-        let addr = addr.encode();
-        let code_hash = code_hash.as_ref();
-        let code_tag = code_tag.serialize_to_vec();
-        unsafe {
-            namada_tx_update_validity_predicate(
-                addr.as_ptr() as _,
-                addr.len() as _,
-                code_hash.as_ptr() as _,
-                code_hash.len() as _,
-                code_tag.as_ptr() as _,
-                code_tag.len() as _,
-            )
-        };
-        Ok(())
     }
 
     fn emit_ibc_event(&mut self, event: &ibc::IbcEvent) -> Result<(), Error> {

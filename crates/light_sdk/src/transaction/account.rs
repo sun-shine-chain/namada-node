@@ -20,13 +20,11 @@ impl InitAccount {
     /// Build a raw InitAccount transaction from the given parameters
     pub fn new(
         public_keys: Vec<common::PublicKey>,
-        vp_code_hash: Hash,
         threshold: u8,
         args: GlobalArgs,
     ) -> Self {
         let init_account = namada_sdk::account::InitAccount {
             public_keys,
-            vp_code_hash,
             threshold,
         };
 
@@ -174,14 +172,12 @@ impl UpdateAccount {
     /// Build a raw UpdateAccount transaction from the given parameters
     pub fn new(
         addr: Address,
-        vp_code_hash: Option<Hash>,
         public_keys: Vec<common::PublicKey>,
         threshold: Option<u8>,
         args: GlobalArgs,
     ) -> Self {
         let update_account = namada_sdk::account::UpdateAccount {
             addr,
-            vp_code_hash,
             public_keys,
             threshold,
         };

@@ -208,7 +208,7 @@ pub fn validate_multitoken_vp_from_tx<'a>(
 
 /// Initialize the test storage. Requires initialized [`tx_host_env::ENV`].
 pub fn init_storage() -> (Address, Address) {
-    // wasm for init_account
+    // wasm for init_account, mock vp_user
     let code = TestWasms::VpAlwaysTrue.read_bytes();
     let code_hash = Hash::sha256(&code);
 
@@ -225,7 +225,11 @@ pub fn init_storage() -> (Address, Address) {
         .unwrap();
         // store wasm code
         let key = Key::wasm_code(&code_hash);
+        let hash_key = Key::wasm_hash("vp_user.wasm");
+        let code_name_key = Key::wasm_code_name("vp_user.wasm".to_owned());
         env.state.db_write(&key, code.clone()).unwrap();
+        env.state.db_write(&hash_key, code_hash).unwrap();
+        env.state.db_write(&code_name_key, code_hash).unwrap();
 
         // block header to check timeout timestamp
         env.state
@@ -239,11 +243,11 @@ pub fn init_storage() -> (Address, Address) {
     });
 
     // initialize a token
-    let token = tx_host_env::ctx().init_account(code_hash, &None).unwrap();
+    let token = tx_host_env::ctx().init_account().unwrap();
     let denom_key = token::storage_key::denom_key(&token);
     let token_denom = token::Denomination(ANY_DENOMINATION);
     // initialize an account
-    let account = tx_host_env::ctx().init_account(code_hash, &None).unwrap();
+    let account = tx_host_env::ctx().init_account().unwrap();
     let key = token::storage_key::balance_key(&token, &account);
     let init_bal = Amount::from_uint(100, token_denom).unwrap();
     tx_host_env::with(|env| {

@@ -236,12 +236,10 @@ pub fn parse_unsigned(
 
 /// Create signed [`Transactions`] for an established account.
 pub fn init_established_account(
-    vp: String,
     public_keys: Vec<StringEncoded<common::PublicKey>>,
     threshold: u8,
 ) -> (Address, UnsignedTransactions) {
     let unsigned_tx = EstablishedAccountTx {
-        vp,
         threshold,
         public_keys,
     };
@@ -306,8 +304,6 @@ pub fn init_validator(
         eth_cold_key: StringEncoded::new(
             validator_wallet.eth_cold_key.ref_to(),
         ),
-        // No custom validator VPs yet
-        vp: utils::VP_USER.to_string(),
         commission_rate,
         max_commission_rate_change,
         net_address,
@@ -386,7 +382,6 @@ pub async fn sign_validator_account_tx(
                 consensus_key,
                 protocol_key,
                 tendermint_node_key,
-                vp,
                 commission_rate,
                 max_commission_rate_change,
                 net_address,
@@ -423,7 +418,6 @@ pub async fn sign_validator_account_tx(
                 consensus_key,
                 protocol_key,
                 tendermint_node_key,
-                vp,
                 commission_rate,
                 max_commission_rate_change,
                 net_address,
@@ -587,8 +581,6 @@ pub type SignedBondTx<T> = Signed<BondTx<T>>;
 pub struct ValidatorAccountTx<PK: Ord> {
     /// The address of the validator.
     pub address: StringEncoded<EstablishedAddress>,
-    // TODO: remove the vp field
-    pub vp: String,
     /// Commission rate charged on rewards for delegators (bounded inside
     /// 0-1)
     pub commission_rate: Dec,
@@ -681,7 +673,6 @@ impl TxToSign for ValidatorAccountTx<SignedPk> {
     Ord,
 )]
 pub struct EstablishedAccountTx {
-    pub vp: String,
     #[serde(default = "default_threshold")]
     pub threshold: u8,
     /// PKs have to come last in TOML to avoid `ValueAfterTable` error
@@ -1113,7 +1104,6 @@ pub fn validate(
                         signatures: acct.signatures,
                         data: ValidatorAccountTx {
                             address: acct.data.address,
-                            vp: acct.data.vp,
                             commission_rate: acct.data.commission_rate,
                             max_commission_rate_change: acct
                                 .data
@@ -1251,7 +1241,7 @@ pub struct TokenBalancesForValidation {
 
 pub fn validate_established_account(
     tx: &EstablishedAccountTx,
-    vps: Option<&ValidityPredicates>,
+    _vps: Option<&ValidityPredicates>,
     all_used_addresses: &mut BTreeSet<Address>,
     established_accounts: &mut BTreeMap<Address, (Vec<common::PublicKey>, u8)>,
 ) -> bool {
@@ -1309,19 +1299,6 @@ pub fn validate_established_account(
         all_used_addresses.insert(established_address);
     }
 
-    // Check the VP exists
-    if !vps
-        .map(|vps| vps.wasm.contains_key(&tx.vp))
-        .unwrap_or_default()
-    {
-        eprintln!(
-            "An `established_account` tx `vp` \"{}\" not found in Validity \
-             predicates file.",
-            tx.vp
-        );
-        is_valid = false;
-    }
-
     // If PK is used, check the authorization
     if tx.public_keys.is_empty() {
         eprintln!("An `established_account` tx was found with no public keys.");
@@ -1332,7 +1309,7 @@ pub fn validate_established_account(
 
 pub fn validate_validator_account(
     signed_tx: &SignedValidatorAccountTx,
-    vps: Option<&ValidityPredicates>,
+    _vps: Option<&ValidityPredicates>,
     all_used_addresses: &BTreeSet<Address>,
     established_accounts: &BTreeMap<Address, (Vec<common::PublicKey>, u8)>,
     validator_accounts: &mut BTreeSet<Address>,
@@ -1418,19 +1395,6 @@ pub fn validate_validator_account(
         }
         established_address
     };
-
-    // Check the VP exists
-    if !vps
-        .map(|vps| vps.wasm.contains_key(&tx.vp))
-        .unwrap_or_default()
-    {
-        eprintln!(
-            "A `validator_account` tx `vp` \"{}\" not found in Validity \
-             predicates file.",
-            tx.vp
-        );
-        is_valid = false;
-    }
 
     // Check keys authorizations
     let unsigned = UnsignedValidatorAccountTx::from(tx);
@@ -1520,7 +1484,6 @@ impl From<&ValidatorAccountTx<SignedPk>> for UnsignedValidatorAccountTx {
     fn from(tx: &ValidatorAccountTx<SignedPk>) -> Self {
         let ValidatorAccountTx {
             address,
-            vp,
             commission_rate,
             max_commission_rate_change,
             metadata,
@@ -1535,7 +1498,6 @@ impl From<&ValidatorAccountTx<SignedPk>> for UnsignedValidatorAccountTx {
 
         Self {
             address: address.clone(),
-            vp: vp.clone(),
             commission_rate: *commission_rate,
             max_commission_rate_change: *max_commission_rate_change,
             metadata: metadata.clone(),

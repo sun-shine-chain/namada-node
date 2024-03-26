@@ -55,7 +55,6 @@ use crate::tx::{
     TX_RESIGN_STEWARD, TX_REVEAL_PK, TX_TRANSFER_WASM, TX_UNBOND_WASM,
     TX_UNJAIL_VALIDATOR_WASM, TX_UPDATE_ACCOUNT_WASM,
     TX_UPDATE_STEWARD_COMMISSION, TX_VOTE_PROPOSAL, TX_WITHDRAW_WASM,
-    VP_USER_WASM,
 };
 pub use crate::wallet::store::AddressVpType;
 use crate::wallet::{Wallet, WalletIo};
@@ -1111,17 +1110,6 @@ pub async fn to_ledger_vector(
         })?;
         tv.name = "Init_Account_0".to_string();
 
-        let extra = tx
-            .get_section(&init_account.vp_code_hash)
-            .and_then(|x| Section::extra_data_sec(x.as_ref()))
-            .ok_or_else(|| {
-                Error::Other("unable to load vp code".to_string())
-            })?;
-        let vp_code = if extra.tag == Some(VP_USER_WASM.to_string()) {
-            "User".to_string()
-        } else {
-            HEXLOWER.encode(&extra.code.hash().0)
-        };
         tv.output.extend(vec![format!("Type : Init Account")]);
         tv.output.extend(
             init_account
@@ -1129,10 +1117,8 @@ pub async fn to_ledger_vector(
                 .iter()
                 .map(|k| format!("Public key : {}", k)),
         );
-        tv.output.extend(vec![
-            format!("Threshold : {}", init_account.threshold),
-            format!("VP type : {}", vp_code),
-        ]);
+        tv.output
+            .extend(vec![format!("Threshold : {}", init_account.threshold)]);
 
         tv.output_expert.extend(
             init_account
@@ -1140,10 +1126,8 @@ pub async fn to_ledger_vector(
                 .iter()
                 .map(|k| format!("Public key : {}", k)),
         );
-        tv.output_expert.extend(vec![
-            format!("Threshold : {}", init_account.threshold),
-            format!("VP type : {}", HEXLOWER.encode(&extra.code.hash().0)),
-        ]);
+        tv.output_expert
+            .extend(vec![format!("Threshold : {}", init_account.threshold)]);
     } else if code_sec.tag == Some(TX_BECOME_VALIDATOR_WASM.to_string()) {
         let init_validator = BecomeValidator::try_from_slice(
             &tx.data()
@@ -1338,26 +1322,6 @@ pub async fn to_ledger_vector(
             )])
         }
 
-        let vp_code_data = match &update_account.vp_code_hash {
-            Some(hash) => {
-                let extra = tx
-                    .get_section(hash)
-                    .and_then(|x| Section::extra_data_sec(x.as_ref()))
-                    .ok_or_else(|| {
-                        Error::Other("unable to load vp code".to_string())
-                    })?;
-                let vp_code = if extra.tag == Some(VP_USER_WASM.to_string()) {
-                    "User".to_string()
-                } else {
-                    HEXLOWER.encode(&extra.code.hash().0)
-                };
-                Some((vp_code, extra.code.hash()))
-            }
-            None => None,
-        };
-        if let Some((vp_code, _)) = &vp_code_data {
-            tv.output.extend(vec![format!("VP type : {}", vp_code)]);
-        }
         tv.output_expert
             .extend(vec![format!("Address : {}", update_account.addr)]);
         tv.output_expert.extend(
@@ -1369,12 +1333,6 @@ pub async fn to_ledger_vector(
         if let Some(threshold) = update_account.threshold {
             tv.output_expert
                 .extend(vec![format!("Threshold : {}", threshold,)])
-        }
-        if let Some((_, extra_code_hash)) = vp_code_data {
-            tv.output_expert.extend(vec![format!(
-                "VP type : {}",
-                HEXLOWER.encode(&extra_code_hash.0)
-            )]);
         }
     } else if code_sec.tag == Some(TX_TRANSFER_WASM.to_string()) {
         let transfer = Transfer::try_from_slice(

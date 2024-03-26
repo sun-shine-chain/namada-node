@@ -2651,7 +2651,6 @@ pub async fn build_init_account(
     context: &impl Namada,
     args::TxInitAccount {
         tx: tx_args,
-        vp_code_path,
         tx_code_path,
         public_keys,
         threshold,
@@ -2665,8 +2664,6 @@ pub async fn build_init_account(
         &signing_data.fee_payer,
     )
     .await?;
-
-    let vp_code_hash = query_wasm_code_hash_buf(context, vp_code_path).await?;
 
     let threshold = match threshold {
         Some(threshold) => *threshold,
@@ -2683,25 +2680,15 @@ pub async fn build_init_account(
 
     let data = InitAccount {
         public_keys: public_keys.clone(),
-        // We will add the hash inside the add_code_hash function
-        vp_code_hash: Hash::zero(),
         threshold,
     };
 
-    let add_code_hash = |tx: &mut Tx, data: &mut InitAccount| {
-        let extra_section_hash = tx.add_extra_section_from_hash(
-            vp_code_hash,
-            Some(vp_code_path.to_string_lossy().into_owned()),
-        );
-        data.vp_code_hash = extra_section_hash;
-        Ok(())
-    };
     build(
         context,
         tx_args,
         tx_code_path.clone(),
         data,
-        add_code_hash,
+        do_nothing,
         unshield,
         fee_amount,
         &signing_data.fee_payer,
@@ -2715,7 +2702,6 @@ pub async fn build_update_account(
     context: &impl Namada,
     args::TxUpdateAccount {
         tx: tx_args,
-        vp_code_path,
         tx_code_path,
         addr,
         public_keys,
@@ -2749,53 +2735,24 @@ pub async fn build_update_account(
         )));
     };
 
-    let vp_code_hash = match vp_code_path {
-        Some(code_path) => {
-            let vp_hash = query_wasm_code_hash_buf(context, code_path).await?;
-            Some(vp_hash)
-        }
-        None => None,
-    };
-
     let chain_id = tx_args.chain_id.clone().unwrap();
     let mut tx = Tx::new(chain_id, tx_args.expiration);
     if let Some(memo) = &tx_args.memo {
         tx.add_memo(memo);
     }
-    let extra_section_hash = vp_code_path.as_ref().zip(vp_code_hash).map(
-        |(code_path, vp_code_hash)| {
-            tx.add_extra_section_from_hash(
-                vp_code_hash,
-                Some(code_path.to_string_lossy().into_owned()),
-            )
-        },
-    );
 
     let data = UpdateAccount {
         addr,
-        vp_code_hash: extra_section_hash,
         public_keys: public_keys.clone(),
         threshold: *threshold,
     };
 
-    let add_code_hash = |tx: &mut Tx, data: &mut UpdateAccount| {
-        let extra_section_hash = vp_code_path.as_ref().zip(vp_code_hash).map(
-            |(code_path, vp_code_hash)| {
-                tx.add_extra_section_from_hash(
-                    vp_code_hash,
-                    Some(code_path.to_string_lossy().into_owned()),
-                )
-            },
-        );
-        data.vp_code_hash = extra_section_hash;
-        Ok(())
-    };
     build(
         context,
         tx_args,
         tx_code_path.clone(),
         data,
-        add_code_hash,
+        do_nothing,
         unshield,
         fee_amount,
         &signing_data.fee_payer,
