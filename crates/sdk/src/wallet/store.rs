@@ -57,7 +57,7 @@ pub struct ValidatorData {
 }
 
 /// A Storage area for keys and addresses
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct Store {
     /// Known viewing keys
     view_keys: BTreeMap<Alias, ExtendedViewingKey>,
@@ -660,7 +660,7 @@ impl Store {
         });
     }
 
-    /// get an address with the vp type
+    /// Get addresses with the vp type
     pub fn get_addresses_with_vp_type(
         &self,
         vp_type: AddressVpType,

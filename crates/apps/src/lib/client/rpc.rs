@@ -163,7 +163,15 @@ pub async fn query_transfers(
     let query_token = args.token;
     let wallet = context.wallet().await;
     let query_owner = args.owner.map_or_else(
-        || Either::Right(wallet.get_addresses().into_values().collect()),
+        || {
+            Either::Right(
+                wallet
+                    .get_addresses_atomic()
+                    .expect("Failed to read from the wallet storage.")
+                    .into_values()
+                    .collect(),
+            )
+        },
         Either::Left,
     );
     let mut shielded = context.shielded_mut().await;
@@ -182,12 +190,16 @@ pub async fn query_transfers(
             context.io(),
             &query_owner,
             &query_token,
-            &wallet.get_viewing_keys(),
+            &wallet
+                .get_viewing_keys_atomic()
+                .expect("Failed to read from the wallet storage."),
         )
         .await
         .unwrap();
     // To facilitate lookups of human-readable token names
-    let vks = wallet.get_viewing_keys();
+    let vks = wallet
+        .get_viewing_keys_atomic()
+        .expect("Failed to read from the wallet storage.");
     // To enable ExtendedFullViewingKeys to be displayed instead of ViewingKeys
     let fvk_map: HashMap<_, _> = vks
         .values()
@@ -475,14 +487,16 @@ pub async fn query_pinned_balance(
         vec![pa]
     } else {
         wallet
-            .get_payment_addrs()
+            .get_payment_addrs_atomic()
+            .expect("Failed to read from the wallet storage.")
             .into_values()
             .filter(PaymentAddress::is_pinned)
             .collect()
     };
     // Get the viewing keys with which to try note decryptions
     let viewing_keys: Vec<ViewingKey> = wallet
-        .get_viewing_keys()
+        .get_viewing_keys_atomic()
+        .expect("Failed to read from the wallet storage.")
         .values()
         .map(|fvk| ExtendedFullViewingKey::from(*fvk).fvk.vk)
         .collect();
@@ -676,7 +690,9 @@ async fn print_balances(
                 format!(
                     ": {}, owned by {}",
                     context.format_amount(tok, balance).await,
-                    wallet.lookup_alias(owner)
+                    wallet
+                        .lookup_alias_atomic(owner)
+                        .expect("Failed to read from the wallet storage.")
                 ),
             ),
             None => continue,
@@ -720,11 +736,13 @@ async fn print_balances(
                 context.io(),
                 &mut w;
                 "No balances owned by {}",
-                wallet.lookup_alias(target)
+                wallet.lookup_alias_atomic(target).expect("Failed to read from the wallet storage.")
             )
             .unwrap(),
             (Some(token), None) => {
-                let token_alias = wallet.lookup_alias(token);
+                let token_alias = wallet
+                    .lookup_alias_atomic(token)
+                    .expect("Failed to read from the wallet storage.");
                 display_line!(context.io(), &mut w; "No balances for token {}", token_alias).unwrap()
             }
             (None, None) => {
@@ -749,16 +767,22 @@ async fn lookup_token_alias(
             )
             .await
             {
-                Ok(ibc_trace) => {
-                    context.wallet().await.lookup_ibc_token_alias(ibc_trace)
-                }
+                Ok(ibc_trace) => context
+                    .wallet()
+                    .await
+                    .lookup_ibc_token_alias_atomic(ibc_trace)
+                    .expect("Failed to read from the wallet storage"),
                 Err(_) => token.to_string(),
             }
         }
         Address::Internal(InternalAddress::Erc20(eth_addr)) => {
             eth_addr.to_canonical()
         }
-        _ => context.wallet().await.lookup_alias(token),
+        _ => context
+            .wallet()
+            .await
+            .lookup_alias_atomic(token)
+            .expect("Failed to read from the wallet storage."),
     }
 }
 
@@ -780,8 +804,11 @@ async fn query_tokens(
         {
             let ibc_denom =
                 rpc::query_ibc_denom(context, token.to_string(), owner).await;
-            let alias =
-                context.wallet().await.lookup_ibc_token_alias(ibc_denom);
+            let alias = context
+                .wallet()
+                .await
+                .lookup_ibc_token_alias_atomic(ibc_denom)
+                .expect("Failed to read from the wallet storage");
             tokens.insert(alias, token.clone());
             // we don't need to check other IBC prefixes
             return tokens;
@@ -791,13 +818,18 @@ async fn query_tokens(
                 tokens.insert(eth_addr.to_string(), token.clone());
             } else {
                 let alias = wallet
-                    .find_alias(token)
+                    .find_alias_atomic(token)
+                    .expect("Failed to read from the wallet storage.")
                     .map(|alias| alias.to_string())
                     .unwrap_or(token.to_string());
                 tokens.insert(alias, token.clone());
             }
         }
-        None => tokens = wallet.tokens_with_aliases(),
+        None => {
+            tokens = wallet
+                .tokens_with_aliases_atomic()
+                .expect("Failed to read from the wallet storage.")
+        }
     }
 
     if !show_ibc_tokens {
@@ -813,8 +845,11 @@ async fn query_tokens(
     {
         Ok(ibc_tokens) => {
             for (trace, addr) in ibc_tokens {
-                let ibc_trace_alias =
-                    context.wallet().await.lookup_ibc_token_alias(trace);
+                let ibc_trace_alias = context
+                    .wallet()
+                    .await
+                    .lookup_ibc_token_alias_atomic(trace)
+                    .expect("Failed to read from the wallet storage");
                 tokens.insert(ibc_trace_alias, addr);
             }
         }
@@ -832,7 +867,8 @@ pub async fn query_ibc_tokens(
     let wallet = context.wallet().await;
     let token = args.token.map(|t| {
         wallet
-            .find_address(&t)
+            .find_address_atomic(&t)
+            .expect("Failed to read from the wallet storage.")
             .map(|addr| addr.to_string())
             .unwrap_or(t)
     });
@@ -840,8 +876,11 @@ pub async fn query_ibc_tokens(
     match rpc::query_ibc_tokens(context, token, owner.as_ref()).await {
         Ok(ibc_tokens) => {
             for (trace, addr) in ibc_tokens {
-                let alias =
-                    context.wallet().await.lookup_ibc_token_alias(trace);
+                let alias = context
+                    .wallet()
+                    .await
+                    .lookup_ibc_token_alias_atomic(trace)
+                    .expect("Failed to read from the wallet storage");
                 display_line!(context.io(), "{}: {}", alias, addr);
             }
         }
@@ -954,7 +993,8 @@ pub async fn query_shielded_balance(
         None => context
             .wallet()
             .await
-            .get_viewing_keys()
+            .get_viewing_keys_atomic()
+            .expect("Failed to read from the wallet storage.")
             .values()
             .copied()
             .collect(),
@@ -1248,7 +1288,8 @@ pub async fn print_decoded_balance_with_epoch(
     let tokens = context
         .wallet()
         .await
-        .get_addresses_with_vp_type(AddressVpType::Token);
+        .get_addresses_with_vp_type_atomic(AddressVpType::Token)
+        .expect("Failed to read from the wallet storage");
     if balance.is_zero() {
         display_line!(context.io(), "No shielded balance found for given key");
     }
@@ -2540,7 +2581,8 @@ pub async fn query_conversions(
     let tokens = context
         .wallet()
         .await
-        .get_addresses_with_vp_type(AddressVpType::Token);
+        .get_addresses_with_vp_type_atomic(AddressVpType::Token)
+        .expect("Failed to read from the wallet storage.");
     let conversions = rpc::query_conversions(context.client())
         .await
         .expect("Conversions should be defined");

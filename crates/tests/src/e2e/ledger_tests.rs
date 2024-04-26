@@ -668,11 +668,11 @@ fn pos_bonds() -> Result<()> {
             genesis.transactions.bond = Some({
                 let wallet = get_pregenesis_wallet(base_dir);
                 let validator_1_address = wallet
-                    .find_address("validator-1")
+                    .find_address_atomic("validator-1")
+                    .expect("Failed to read from the wallet storage.")
                     .expect("Failed to find validator-1 address");
                 let mut bonds = genesis.transactions.bond.unwrap();
-                bonds
-                    .retain(|bond| bond.data.validator != *validator_1_address);
+                bonds.retain(|bond| bond.data.validator != validator_1_address);
                 bonds
             });
             genesis
@@ -1620,11 +1620,11 @@ fn deactivate_and_reactivate_validator() -> Result<()> {
             genesis.transactions.bond = Some({
                 let wallet = get_pregenesis_wallet(base_dir);
                 let validator_1_address = wallet
-                    .find_address("validator-1")
+                    .find_address_atomic("validator-1")
+                    .expect("Failed to read from the wallet storage.")
                     .expect("Failed to find validator-1 address");
                 let mut bonds = genesis.transactions.bond.unwrap();
-                bonds
-                    .retain(|bond| bond.data.validator != *validator_1_address);
+                bonds.retain(|bond| bond.data.validator != validator_1_address);
                 bonds
             });
             genesis
@@ -1794,11 +1794,11 @@ fn test_invalid_validator_txs() -> Result<()> {
             genesis.transactions.bond = Some({
                 let wallet = get_pregenesis_wallet(base_dir);
                 let validator_1_address = wallet
-                    .find_address("validator-1")
+                    .find_address_atomic("validator-1")
+                    .expect("Failed to read from the wallet storage.")
                     .expect("Failed to find validator-1 address");
                 let mut bonds = genesis.transactions.bond.unwrap();
-                bonds
-                    .retain(|bond| bond.data.validator != *validator_1_address);
+                bonds.retain(|bond| bond.data.validator != validator_1_address);
                 bonds
             });
             genesis
@@ -2035,7 +2035,10 @@ fn change_consensus_key() -> Result<()> {
 
     // Get the new consensus SK
     let new_key_alias = "validator-0-consensus-key-1";
-    let new_sk = wallet.find_secret_key(new_key_alias, None).unwrap();
+    let new_sk = wallet
+        .find_secret_key_atomic(new_key_alias, None)
+        .expect("Failed to read from the wallet storage.")
+        .unwrap();
     // Write the key to CometBFT dir
     let cometbft_dir = test.get_cometbft_home(Who::Validator(0));
     namada_apps::node::ledger::tendermint_node::write_validator_key(

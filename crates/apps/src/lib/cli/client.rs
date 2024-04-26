@@ -28,7 +28,7 @@ impl CliApi {
                     // Ledger cmds
                     Sub::TxCustom(TxCustom(args)) => {
                         // TODO: too much boilerplate to setup client
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.tx.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -36,17 +36,14 @@ impl CliApi {
                         });
                         client.wait_until_node_is_synced(&io).await?;
                         let args = args.to_sdk(&mut ctx);
-                        let namada = ctx.to_sdk(client, io);
                         let dry_run =
                             args.tx.dry_run || args.tx.dry_run_wrapper;
+                        if dry_run {
+                            ctx.set_dry_run()
+                        }
+                        let namada = ctx.to_sdk(client, io);
                         tx::submit_custom(&namada, args).await?;
-                        if !dry_run {
-                            namada
-                                .wallet()
-                                .await
-                                .save()
-                                .unwrap_or_else(|err| eprintln!("{}", err));
-                        } else {
+                        if dry_run {
                             namada.io().println(
                                 "Transaction dry run. No addresses have been \
                                  saved.",
@@ -54,7 +51,7 @@ impl CliApi {
                         }
                     }
                     Sub::TxTransfer(TxTransfer(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.tx.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -66,7 +63,7 @@ impl CliApi {
                         tx::submit_transfer(&namada, args).await?;
                     }
                     Sub::TxIbcTransfer(TxIbcTransfer(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.tx.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -78,7 +75,7 @@ impl CliApi {
                         tx::submit_ibc_transfer(&namada, args).await?;
                     }
                     Sub::TxUpdateAccount(TxUpdateAccount(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.tx.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -90,7 +87,7 @@ impl CliApi {
                         tx::submit_update_account(&namada, args).await?;
                     }
                     Sub::TxInitAccount(TxInitAccount(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.tx.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -98,17 +95,14 @@ impl CliApi {
                         });
                         client.wait_until_node_is_synced(&io).await?;
                         let args = args.to_sdk(&mut ctx);
-                        let namada = ctx.to_sdk(client, io);
                         let dry_run =
                             args.tx.dry_run || args.tx.dry_run_wrapper;
+                        if dry_run {
+                            ctx.set_dry_run();
+                        }
+                        let namada = ctx.to_sdk(client, io);
                         tx::submit_init_account(&namada, args).await?;
-                        if !dry_run {
-                            namada
-                                .wallet()
-                                .await
-                                .save()
-                                .unwrap_or_else(|err| eprintln!("{}", err));
-                        } else {
+                        if dry_run {
                             namada.io().println(
                                 "Transaction dry run. No addresses have been \
                                  saved.",
@@ -116,7 +110,7 @@ impl CliApi {
                         }
                     }
                     Sub::TxBecomeValidator(TxBecomeValidator(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.tx.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -141,7 +135,7 @@ impl CliApi {
                             .await?;
                     }
                     Sub::TxInitValidator(TxInitValidator(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.tx.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -166,7 +160,7 @@ impl CliApi {
                             .await?;
                     }
                     Sub::TxInitProposal(TxInitProposal(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.tx.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -178,7 +172,7 @@ impl CliApi {
                         tx::submit_init_proposal(&namada, args).await?;
                     }
                     Sub::TxVoteProposal(TxVoteProposal(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.tx.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -190,7 +184,7 @@ impl CliApi {
                         tx::submit_vote_proposal(&namada, args).await?;
                     }
                     Sub::TxRevealPk(TxRevealPk(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.tx.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -202,7 +196,7 @@ impl CliApi {
                         tx::submit_reveal_pk(&namada, args).await?;
                     }
                     Sub::Bond(Bond(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.tx.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -214,7 +208,7 @@ impl CliApi {
                         tx::submit_bond(&namada, args).await?;
                     }
                     Sub::Unbond(Unbond(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.tx.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -226,7 +220,7 @@ impl CliApi {
                         tx::submit_unbond(&namada, args).await?;
                     }
                     Sub::Withdraw(Withdraw(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.tx.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -238,7 +232,7 @@ impl CliApi {
                         tx::submit_withdraw(&namada, args).await?;
                     }
                     Sub::ClaimRewards(ClaimRewards(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.tx.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -250,7 +244,7 @@ impl CliApi {
                         tx::submit_claim_rewards(&namada, args).await?;
                     }
                     Sub::Redelegate(Redelegate(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.tx.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -264,7 +258,7 @@ impl CliApi {
                     Sub::TxCommissionRateChange(TxCommissionRateChange(
                         args,
                     )) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.tx.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -277,7 +271,7 @@ impl CliApi {
                             .await?;
                     }
                     Sub::TxChangeConsensusKey(TxChangeConsensusKey(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.tx.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -285,11 +279,16 @@ impl CliApi {
                         });
                         client.wait_until_node_is_synced(&io).await?;
                         let args = args.to_sdk(&mut ctx);
+                        let dry_run =
+                            args.tx.dry_run || args.tx.dry_run_wrapper;
+                        if dry_run {
+                            ctx.set_dry_run()
+                        }
                         let namada = ctx.to_sdk(client, io);
                         tx::submit_change_consensus_key(&namada, args).await?;
                     }
                     Sub::TxMetadataChange(TxMetadataChange(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.tx.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -310,7 +309,8 @@ impl CliApi {
                         let chain_ctx = ctx.take_chain_or_exit();
                         let vks = chain_ctx
                             .wallet
-                            .get_viewing_keys()
+                            .get_viewing_keys_atomic()
+                            .expect("Failed to read from the wallet storage.")
                             .values()
                             .copied()
                             .map(|vk| ExtendedFullViewingKey::from(vk).fvk.vk)
@@ -338,7 +338,7 @@ impl CliApi {
                     #[cfg(feature = "namada-eth-bridge")]
                     Sub::AddToEthBridgePool(args) => {
                         let args = args.0;
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.tx.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -357,7 +357,7 @@ impl CliApi {
                         );
                     }
                     Sub::TxUnjailValidator(TxUnjailValidator(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.tx.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -369,7 +369,7 @@ impl CliApi {
                         tx::submit_unjail_validator(&namada, args).await?;
                     }
                     Sub::TxDeactivateValidator(TxDeactivateValidator(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.tx.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -381,7 +381,7 @@ impl CliApi {
                         tx::submit_deactivate_validator(&namada, args).await?;
                     }
                     Sub::TxReactivateValidator(TxReactivateValidator(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.tx.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -395,7 +395,7 @@ impl CliApi {
                     Sub::TxUpdateStewardCommission(
                         TxUpdateStewardCommission(args),
                     ) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.tx.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -408,7 +408,7 @@ impl CliApi {
                             .await?;
                     }
                     Sub::TxResignSteward(TxResignSteward(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.tx.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -421,7 +421,7 @@ impl CliApi {
                     }
                     // Ledger queries
                     Sub::QueryEpoch(QueryEpoch(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -432,7 +432,7 @@ impl CliApi {
                         rpc::query_and_print_epoch(&namada).await;
                     }
                     Sub::QueryNextEpochInfo(QueryNextEpochInfo(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -443,7 +443,7 @@ impl CliApi {
                         rpc::query_and_print_next_epoch_info(&namada).await;
                     }
                     Sub::QueryStatus(QueryStatus(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -453,7 +453,7 @@ impl CliApi {
                         rpc::query_and_print_status(&namada).await;
                     }
                     Sub::QueryValidatorState(QueryValidatorState(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.query.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -466,7 +466,7 @@ impl CliApi {
                             .await;
                     }
                     Sub::QueryTransfers(QueryTransfers(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.query.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -478,7 +478,7 @@ impl CliApi {
                         rpc::query_transfers(&namada, args).await;
                     }
                     Sub::QueryConversions(QueryConversions(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.query.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -490,7 +490,7 @@ impl CliApi {
                         rpc::query_conversions(&namada, args).await;
                     }
                     Sub::QueryMaspRewardTokens(QueryMaspRewardTokens(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -501,7 +501,7 @@ impl CliApi {
                         rpc::query_masp_reward_tokens(&namada).await;
                     }
                     Sub::QueryBlock(QueryBlock(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -512,7 +512,7 @@ impl CliApi {
                         rpc::query_block(&namada).await;
                     }
                     Sub::QueryBalance(QueryBalance(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.query.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -536,7 +536,7 @@ impl CliApi {
                         rpc::query_ibc_tokens(&namada, args).await;
                     }
                     Sub::QueryBonds(QueryBonds(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.query.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -550,7 +550,7 @@ impl CliApi {
                             .expect("expected successful query of bonds");
                     }
                     Sub::QueryBondedStake(QueryBondedStake(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.query.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -562,7 +562,7 @@ impl CliApi {
                         rpc::query_bonded_stake(&namada, args).await;
                     }
                     Sub::QueryCommissionRate(QueryCommissionRate(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.query.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -575,7 +575,7 @@ impl CliApi {
                             .await;
                     }
                     Sub::QueryMetaData(QueryMetaData(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.query.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -587,7 +587,7 @@ impl CliApi {
                         rpc::query_and_print_metadata(&namada, args).await;
                     }
                     Sub::QuerySlashes(QuerySlashes(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.query.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -599,7 +599,7 @@ impl CliApi {
                         rpc::query_slashes(&namada, args).await;
                     }
                     Sub::QueryRewards(QueryRewards(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.query.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -611,7 +611,7 @@ impl CliApi {
                         rpc::query_and_print_rewards(&namada, args).await;
                     }
                     Sub::QueryDelegations(QueryDelegations(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.query.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -623,7 +623,7 @@ impl CliApi {
                         rpc::query_delegations(&namada, args).await;
                     }
                     Sub::QueryFindValidator(QueryFindValidator(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.query.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -635,7 +635,7 @@ impl CliApi {
                         rpc::query_find_validator(&namada, args).await;
                     }
                     Sub::QueryResult(QueryResult(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.query.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -647,7 +647,7 @@ impl CliApi {
                         rpc::query_result(&namada, args).await;
                     }
                     Sub::QueryRawBytes(QueryRawBytes(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.query.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -659,7 +659,7 @@ impl CliApi {
                         rpc::query_raw_bytes(&namada, args).await;
                     }
                     Sub::QueryProposal(QueryProposal(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.query.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -671,7 +671,7 @@ impl CliApi {
                         rpc::query_proposal(&namada, args).await;
                     }
                     Sub::QueryProposalResult(QueryProposalResult(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.query.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -683,7 +683,7 @@ impl CliApi {
                         rpc::query_proposal_result(&namada, args).await;
                     }
                     Sub::QueryProposalVotes(QueryProposalVotes(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.query.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -697,7 +697,7 @@ impl CliApi {
                     Sub::QueryProtocolParameters(QueryProtocolParameters(
                         args,
                     )) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.query.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -709,7 +709,7 @@ impl CliApi {
                         rpc::query_protocol_parameters(&namada, args).await;
                     }
                     Sub::QueryPgf(QueryPgf(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.query.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -721,7 +721,7 @@ impl CliApi {
                         rpc::query_pgf(&namada, args).await;
                     }
                     Sub::QueryAccount(QueryAccount(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.query.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -733,7 +733,7 @@ impl CliApi {
                         rpc::query_account(&namada, args).await;
                     }
                     Sub::SignTx(SignTx(args)) => {
-                        let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                        let chain_ctx = ctx.borrow_chain_or_exit();
                         let ledger_address =
                             chain_ctx.get(&args.tx.ledger_address);
                         let client = client.unwrap_or_else(|| {
@@ -781,7 +781,7 @@ impl CliApi {
                 Utils::EpochSleep(EpochSleep(args)) => {
                     let mut ctx = cli::Context::new::<IO>(global_args)
                         .expect("expected to construct a context");
-                    let chain_ctx = ctx.borrow_mut_chain_or_exit();
+                    let chain_ctx = ctx.borrow_chain_or_exit();
                     let ledger_address = chain_ctx.get(&args.ledger_address);
                     let client = C::from_tendermint_address(&ledger_address);
                     client.wait_until_node_is_synced(&io).await?;

@@ -17,7 +17,7 @@ use namada::tx::{CompressedSignature, Section, Signer, Tx};
 use namada_sdk::args::TxBecomeValidator;
 use namada_sdk::rpc::{InnerTxResult, TxBroadcastData, TxResponse};
 use namada_sdk::wallet::alias::validator_consensus_key;
-use namada_sdk::wallet::{Wallet, WalletIo};
+use namada_sdk::wallet::{Wallet, WalletIo, WalletStorage};
 use namada_sdk::{display_line, edisplay_line, error, signing, tx, Namada};
 use rand::rngs::OsRng;
 use tokio::sync::RwLock;
@@ -62,7 +62,7 @@ pub async fn aux_signing_data(
     Ok(signing_data)
 }
 
-pub async fn with_hardware_wallet<'a, U: WalletIo + Clone>(
+pub async fn with_hardware_wallet<'a, U: WalletIo + WalletStorage + Clone>(
     mut tx: Tx,
     pubkey: common::PublicKey,
     parts: HashSet<signing::Signable>,
@@ -72,7 +72,8 @@ pub async fn with_hardware_wallet<'a, U: WalletIo + Clone>(
     let path = wallet
         .read()
         .await
-        .find_path_by_pkh(&(&pubkey).into())
+        .find_path_by_pkh_atomic(&(&pubkey).into())
+        .expect("Failed to read from the wallet storage.")
         .map_err(|_| {
             error::Error::Other(
                 "Unable to find derivation path for key".to_string(),
@@ -200,7 +201,8 @@ pub async fn submit_reveal_aux(
         let public_key = context
             .wallet_mut()
             .await
-            .find_public_key_by_pkh(pkh)
+            .find_public_key_by_pkh_atomic(pkh)
+            .expect("Failed to read from the wallet storage")
             .map_err(|e| error::Error::Other(e.to_string()))?;
 
         if tx::is_reveal_pk_needed(context.client(), address, args.force)
@@ -313,61 +315,74 @@ pub async fn submit_change_consensus_key(
     args: args::ConsensusKeyChange,
 ) -> Result<(), error::Error> {
     let validator = args.validator;
-    let consensus_key = args.consensus_key;
+    let user_consensus_key = args.consensus_key;
 
-    // Determine the alias for the new key
     let mut wallet = namada.wallet_mut().await;
-    let alias = wallet.find_alias(&validator).cloned();
-    let base_consensus_key_alias = alias
-        .map(|al| validator_consensus_key(&al))
-        .unwrap_or_else(|| {
-            validator_consensus_key(&validator.to_string().into())
-        });
-    let mut consensus_key_alias = base_consensus_key_alias.to_string();
-    let all_keys = wallet.get_secret_keys();
-    let mut key_counter = 0;
-    while all_keys.contains_key(&consensus_key_alias) {
-        key_counter += 1;
-        consensus_key_alias =
-            format!("{base_consensus_key_alias}-{key_counter}");
-    }
 
     // Check the given key or generate a new one
-    let new_key = consensus_key
-        .map(|key| match key {
-            common::PublicKey::Ed25519(_) => key,
-            common::PublicKey::Secp256k1(_) => {
-                edisplay_line!(
-                    namada.io(),
-                    "Consensus key can only be ed25519"
+    let (consensus_key_alias, consensus_key, is_consensus_key_generated) =
+        user_consensus_key
+            .map(|key| match key {
+                common::PublicKey::Ed25519(_) => {
+                    // no alias, the user key will not be saved
+                    (String::default(), key, false)
+                }
+                common::PublicKey::Secp256k1(_) => {
+                    edisplay_line!(
+                        namada.io(),
+                        "Consensus key can only be ed25519"
+                    );
+                    safe_exit(1)
+                }
+            })
+            .unwrap_or_else(|| {
+                display_line!(namada.io(), "Generating new consensus key...");
+
+                // Determine the alias for the new key
+                let validator_alias = wallet
+                    .find_alias_atomic(&validator)
+                    .expect("Failed to read from the wallet storage.");
+                let base_consensus_key_alias = validator_alias
+                    .map(|a| validator_consensus_key(&a))
+                    .unwrap_or_else(|| {
+                        validator_consensus_key(&validator.to_string().into())
+                    });
+
+                let mut consensus_key_alias =
+                    base_consensus_key_alias.to_string();
+                let all_keys = wallet
+                    .get_secret_keys_atomic()
+                    .expect("Failed to read from the wallet storage.");
+                let mut key_counter = 0;
+                while all_keys.contains_key(&consensus_key_alias) {
+                    key_counter += 1;
+                    consensus_key_alias =
+                        format!("{base_consensus_key_alias}-{key_counter}");
+                }
+                let password = read_and_confirm_encryption_password(
+                    args.unsafe_dont_encrypt,
                 );
-                safe_exit(1)
-            }
-        })
-        .unwrap_or_else(|| {
-            display_line!(namada.io(), "Generating new consensus key...");
-            let password =
-                read_and_confirm_encryption_password(args.unsafe_dont_encrypt);
-            wallet
-                .gen_store_secret_key(
-                    // Note that TM only allows ed25519 for consensus key
-                    SchemeType::Ed25519,
-                    Some(consensus_key_alias.clone()),
-                    args.tx.wallet_alias_force,
-                    password,
-                    &mut OsRng,
-                )
-                .expect("Key generation should not fail.")
-                .1
-                .ref_to()
-        });
+
+                let (alias, sk) = wallet
+                    .gen_store_secret_key_atomic(
+                        // Note that TM only allows ed25519 for consensus key
+                        SchemeType::Ed25519,
+                        Some(consensus_key_alias.clone()),
+                        args.tx.wallet_alias_force,
+                        password,
+                        &mut OsRng,
+                    )
+                    .expect("Failed to update the wallet storage.")
+                    .expect("Key generation should not fail.");
+                (alias, sk.ref_to(), true)
+            });
 
     // To avoid wallet deadlocks in following operations
     drop(wallet);
 
     let args = namada::sdk::args::ConsensusKeyChange {
         validator: validator.clone(),
-        consensus_key: Some(new_key.clone()),
+        consensus_key: Some(consensus_key.clone()),
         ..args
     };
 
@@ -377,29 +392,39 @@ pub async fn submit_change_consensus_key(
         tx::dump_tx(namada.io(), &args.tx, tx);
     } else {
         sign(namada, &mut tx, &args.tx, signing_data).await?;
+
         let resp = namada.submit(tx, &args.tx).await?;
-
-        if !args.tx.dry_run {
-            if resp.is_applied_and_valid().is_some() {
-                namada.wallet_mut().await.save().unwrap_or_else(|err| {
-                    edisplay_line!(namada.io(), "{}", err)
-                });
-
+        if resp.is_applied_and_valid().is_some() {
+            if !args.tx.dry_run {
+                if is_consensus_key_generated {
+                    display_line!(
+                        namada.io(),
+                        "New consensus key stored with alias \
+                         \"{consensus_key_alias}\".",
+                    );
+                }
                 display_line!(
                     namada.io(),
-                    "New consensus key stored with alias \
-                     \"{consensus_key_alias}\". It will become active \
+                    "The new consensus key will become active \
                      {EPOCH_SWITCH_BLOCKS_DELAY} blocks before pipeline \
                      offset from the current epoch, at which point you'll \
                      need to give the new key to CometBFT in order to be able \
                      to sign with it in consensus.",
                 );
+            } else {
+                display_line!(
+                    namada.io(),
+                    "Transaction dry run. No new consensus key has been saved."
+                );
             }
         } else {
-            display_line!(
-                namada.io(),
-                "Transaction dry run. No new consensus key has been saved."
-            );
+            // revert the wallet changes: remove the generated key
+            if is_consensus_key_generated {
+                let mut wallet = namada.wallet_mut().await;
+                wallet
+                    .remove_all_by_alias_atomic(consensus_key_alias)
+                    .expect("Failed to update the wallet storage.");
+            }
         }
     }
     Ok(())
@@ -442,7 +467,7 @@ pub async fn submit_become_validator(
             let password =
                 read_and_confirm_encryption_password(args.unsafe_dont_encrypt);
             wallet
-                .gen_store_secret_key(
+                .gen_store_secret_key_atomic(
                     // Note that TM only allows ed25519 for consensus key
                     SchemeType::Ed25519,
                     Some(consensus_key_alias.clone().into()),
@@ -450,6 +475,7 @@ pub async fn submit_become_validator(
                     password,
                     &mut OsRng,
                 )
+                .expect("Failed to update the wallet storage.")
                 .expect("Key generation should not fail.")
                 .1
                 .ref_to()
@@ -473,7 +499,7 @@ pub async fn submit_become_validator(
             let password =
                 read_and_confirm_encryption_password(args.unsafe_dont_encrypt);
             wallet
-                .gen_store_secret_key(
+                .gen_store_secret_key_atomic(
                     // Note that ETH only allows secp256k1
                     SchemeType::Secp256k1,
                     Some(eth_cold_key_alias.clone()),
@@ -481,6 +507,7 @@ pub async fn submit_become_validator(
                     password,
                     &mut OsRng,
                 )
+                .expect("Failed to update the wallet storage.")
                 .expect("Key generation should not fail.")
                 .1
                 .ref_to()
@@ -504,7 +531,7 @@ pub async fn submit_become_validator(
             let password =
                 read_and_confirm_encryption_password(args.unsafe_dont_encrypt);
             wallet
-                .gen_store_secret_key(
+                .gen_store_secret_key_atomic(
                     // Note that ETH only allows secp256k1
                     SchemeType::Secp256k1,
                     Some(eth_hot_key_alias.clone()),
@@ -512,6 +539,7 @@ pub async fn submit_become_validator(
                     password,
                     &mut OsRng,
                 )
+                .expect("Failed to update the wallet storage.")
                 .expect("Key generation should not fail.")
                 .1
                 .ref_to()
@@ -550,7 +578,7 @@ pub async fn submit_become_validator(
     namada
         .wallet_mut()
         .await
-        .insert_keypair(
+        .insert_keypair_atomic(
             protocol_key_alias,
             args.tx.wallet_alias_force,
             protocol_sk.clone(),
@@ -558,6 +586,7 @@ pub async fn submit_become_validator(
             None,
             None,
         )
+        .expect("Failed to update the wallet storage.")
         .ok_or(error::Error::Other(String::from(
             "Failed to store the keypair.",
         )))?;
@@ -588,16 +617,20 @@ pub async fn submit_become_validator(
 
         // add validator address and keys to the wallet
         let mut wallet = namada.wallet_mut().await;
-        wallet.add_validator_data(args.address.clone(), validator_keys);
+        // wallet.add_validator_data(address.clone(), validator_keys);
         wallet
-            .save()
+            .add_validator_data_atomic(args.address.clone(), validator_keys)
             .unwrap_or_else(|err| edisplay_line!(namada.io(), "{}", err));
+        // wallet.save().unwrap_or_else(|err| {
+        //     edisplay_line!(namada.io(), "{}", err)
+        // });
 
         let tendermint_home = config.ledger.cometbft_dir();
         tendermint_node::write_validator_key(
             &tendermint_home,
             &wallet
-                .find_key_by_pk(&consensus_key, None)
+                .find_key_by_pk_atomic(&consensus_key, None)
+                .expect("Failed to read from the wallet storage.")
                 .expect("unable to find consensus key pair in the wallet"),
         )
         .unwrap();

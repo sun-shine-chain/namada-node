@@ -506,11 +506,15 @@ pub async fn save_initialized_accounts<N: Namada>(
                 None => N::WalletUtils::read_alias(&encoded).into(),
             };
             let alias = alias.into_owned();
-            let added = context.wallet_mut().await.insert_address(
-                alias.clone(),
-                address.clone(),
-                args.wallet_alias_force,
-            );
+            let added = context
+                .wallet_mut()
+                .await
+                .insert_address_atomic(
+                    alias.clone(),
+                    address.clone(),
+                    args.wallet_alias_force,
+                )
+                .expect("Failed to update the wallet storage.");
             match added {
                 Some(new_alias) if new_alias != encoded => {
                     display_line!(
@@ -3032,7 +3036,11 @@ async fn construct_shielded_parts<N: Namada>(
     update_ctx: bool,
 ) -> Result<Option<(ShieldedTransfer, HashSet<AssetData>)>> {
     // Precompute asset types to increase chances of success in decoding
-    let token_map = context.wallet().await.get_addresses();
+    let token_map = context
+        .wallet()
+        .await
+        .get_addresses_atomic()
+        .expect("Failed to read from the wallet storage.");
     let tokens = token_map.values().collect();
     let _ = context
         .shielded_mut()
@@ -3330,7 +3338,11 @@ pub async fn gen_ibc_shielded_transfer<N: Namada>(
         validate_amount(context, args.amount, &token, false).await?;
 
     // Precompute asset types to increase chances of success in decoding
-    let token_map = context.wallet().await.get_addresses();
+    let token_map = context
+        .wallet()
+        .await
+        .get_addresses_atomic()
+        .expect("Failed to read from the wallet storage.");
     let tokens = token_map.values().collect();
     let _ = context
         .shielded_mut()
@@ -3551,7 +3563,8 @@ async fn get_refund_target(
             let alias = format!("ibc-refund-target-{}", rng.next_u64());
             let mut wallet = context.wallet_mut().await;
             wallet
-                .insert_payment_addr(alias, payment_addr, false)
+                .insert_payment_addr_atomic(alias, payment_addr, false)
+                .expect("Failed to update the wallet storage.")
                 .ok_or_else(|| {
                     Error::Other(
                         "Adding a new payment address failed".to_string(),

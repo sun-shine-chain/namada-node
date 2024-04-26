@@ -206,6 +206,19 @@ impl Context {
             .unwrap_or_else(|| safe_exit_on_missing_chain_context())
     }
 
+    /// Switch the wallet into dry run mode
+    pub fn set_dry_run(&mut self) -> () {
+        self.chain
+            .as_mut()
+            .unwrap_or_else(|| safe_exit_on_missing_chain_context())
+            .wallet
+            .set_dry_run()
+            .unwrap_or_else(|err| {
+                eprintln!("Failed to load wallet store: {}", err);
+                utils::safe_exit(1)
+            })
+    }
+
     /// Make an implementation of Namada from this object and parameters.
     pub fn to_sdk<C, IO>(self, client: C, io: IO) -> impl Namada
     where
@@ -431,7 +444,8 @@ impl ArgFromContext for Address {
                     .map(|(trace_path, base_denom)| {
                         let base_token = ctx
                             .wallet
-                            .find_address(&base_denom)
+                            .find_address_atomic(&base_denom)
+                            .expect("Failed to read from the wallet storage.")
                             .map(|addr| addr.to_string())
                             .unwrap_or(base_denom);
                         let ibc_denom = format!("{trace_path}/{base_token}");
@@ -447,8 +461,8 @@ impl ArgFromContext for Address {
             // Or it can be an alias that may be found in the wallet
             .or_else(|_| {
                 ctx.wallet
-                    .find_address(raw)
-                    .map(|x| x.into_owned())
+                    .find_address_atomic(raw)
+                    .expect("Failed to read from the wallet storage.")
                     .ok_or(Skip)
             })
             .map_err(|_| format!("Unknown address {raw}"))
@@ -500,7 +514,8 @@ impl ArgFromMutContext for common::SecretKey {
         FromStr::from_str(raw).or_else(|_parse_err| {
             // Or it can be an alias
             ctx.wallet
-                .find_secret_key(raw, None)
+                .find_secret_key_atomic(raw, None)
+                .expect("Failed to read from the wallet storage.")
                 .map_err(|_find_err| format!("Unknown key {}", raw))
         })
     }
@@ -517,11 +532,17 @@ impl ArgFromContext for common::PublicKey {
             // Or it can be a public key hash in hex string
             FromStr::from_str(raw)
                 .map(|pkh: PublicKeyHash| {
-                    ctx.wallet.find_public_key_by_pkh(&pkh).unwrap()
+                    ctx.wallet
+                        .find_public_key_by_pkh_atomic(&pkh)
+                        .expect("Failed to read from the wallet storage.")
+                        .unwrap()
                 })
                 // Or it can be an alias that may be found in the wallet
                 .or_else(|_parse_err| {
-                    ctx.wallet.find_public_key(raw).map_err(|x| x.to_string())
+                    ctx.wallet
+                        .find_public_key_atomic(raw)
+                        .expect("Failed to read from the wallet storage.")
+                        .map_err(|x| x.to_string())
                 })
         })
     }
@@ -537,7 +558,8 @@ impl ArgFromMutContext for ExtendedSpendingKey {
         FromStr::from_str(raw).or_else(|_parse_err| {
             // Or it is a stored alias of one
             ctx.wallet
-                .find_spending_key(raw, None)
+                .find_spending_key_atomic(raw, None)
+                .expect("Failed to read from the wallet storage.")
                 .map_err(|_find_err| format!("Unknown spending key {}", raw))
         })
     }
@@ -553,8 +575,8 @@ impl ArgFromMutContext for ExtendedViewingKey {
         FromStr::from_str(raw).or_else(|_parse_err| {
             // Or it is a stored alias of one
             ctx.wallet
-                .find_viewing_key(raw)
-                .copied()
+                .find_viewing_key_atomic(raw)
+                .expect("Failed to read from the wallet storage.")
                 .map_err(|_find_err| format!("Unknown viewing key {}", raw))
         })
     }
@@ -570,8 +592,8 @@ impl ArgFromContext for PaymentAddress {
         FromStr::from_str(raw).or_else(|_parse_err| {
             // Or it is a stored alias of one
             ctx.wallet
-                .find_payment_addr(raw)
-                .cloned()
+                .find_payment_addr_atomic(raw)
+                .expect("Failed to read from the wallet storage.")
                 .ok_or_else(|| format!("Unknown payment address {}", raw))
         })
     }
