@@ -15,6 +15,7 @@ use super::address::HASH_LEN;
 use crate::hash::Hash;
 
 /// IBC token hash derived from a denomination.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(
     Debug,
     Clone,
