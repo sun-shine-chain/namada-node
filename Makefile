@@ -270,6 +270,9 @@ clean:
 bench:
 	$(cargo) bench --package namada_benchmarks
 
+fuzz-txs-mempool:
+	$(cargo) +$(nightly) fuzz run fuzz_txs_mempool
+
 build-doc:
 	$(cargo) doc --no-deps
 
@@ -348,7 +351,7 @@ dev-deps:
 	$(rustup) toolchain install $(nightly)
 	$(rustup) target add wasm32-unknown-unknown
 	$(rustup) component add rustfmt clippy miri --toolchain $(nightly)
-	$(cargo) install cargo-watch unclog wasm-opt
+	$(cargo) install cargo-watch unclog wasm-opt cargo-fuzz
 
 test-miri:
 	$(cargo) +$(nightly) miri setup
