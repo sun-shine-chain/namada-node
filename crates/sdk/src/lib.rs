@@ -1,5 +1,4 @@
 //! Namada SDK
-
 #![doc(html_favicon_url = "https://dev.namada.net/master/favicon.png")]
 #![doc(html_logo_url = "https://dev.namada.net/master/rustdoc-logo.png")]
 #![deny(rustdoc::broken_intra_doc_links)]
@@ -41,6 +40,7 @@ pub(crate) mod internal_macros;
 pub mod io;
 pub mod migrations;
 pub mod queries;
+pub mod task_env;
 pub mod wallet;
 
 #[cfg(feature = "async-send")]

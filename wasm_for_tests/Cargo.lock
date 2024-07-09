@@ -2938,7 +2938,7 @@ dependencies = [
  "subtle-encoding",
  "tendermint 0.37.0",
  "tendermint-testgen",
- "typed-builder",
+ "typed-builder 0.18.2",
 ]
 
 [[package]]
@@ -3827,6 +3827,7 @@ dependencies = [
  "prost",
  "rand 0.8.5",
  "rand_core 0.6.4",
+ "rayon",
  "regex",
  "reqwest",
  "serde",
@@ -3834,6 +3835,7 @@ dependencies = [
  "sha2 0.9.9",
  "slip10_ed25519",
  "smooth-operator",
+ "tempfile",
  "tendermint-rpc",
  "thiserror",
  "tiny-bip39",
@@ -3841,6 +3843,7 @@ dependencies = [
  "tokio",
  "toml 0.5.11",
  "tracing",
+ "typed-builder 0.19.1",
  "wasmtimer",
  "zeroize",
 ]
@@ -4259,7 +4262,7 @@ version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c11e44798ad209ccdd91fc192f0526a369a01234f7373e1b141c96d7cee4f0e"
 dependencies = [
- "proc-macro-crate 1.3.1",
+ "proc-macro-crate 2.0.0",
  "proc-macro2",
  "quote",
  "syn 2.0.65",
@@ -4671,16 +4674,6 @@ dependencies = [
  "impl-serde",
  "scale-info",
  "uint",
-]
-
-[[package]]
-name = "proc-macro-crate"
-version = "1.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f4c021e1093a56626774e81216a4ce732a735e5bad4868a03f3ed65ca0c3919"
-dependencies = [
- "once_cell",
- "toml_edit 0.19.15",
 ]
 
 [[package]]
@@ -6804,7 +6797,16 @@ version = "0.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77739c880e00693faef3d65ea3aad725f196da38b22fdc7ea6ded6e1ce4d3add"
 dependencies = [
- "typed-builder-macro",
+ "typed-builder-macro 0.18.2",
+]
+
+[[package]]
+name = "typed-builder"
+version = "0.19.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a06fbd5b8de54c5f7c91f6fe4cebb949be2125d7758e630bb58b1d831dbce600"
+dependencies = [
+ "typed-builder-macro 0.19.1",
 ]
 
 [[package]]
@@ -6812,6 +6814,17 @@ name = "typed-builder-macro"
 version = "0.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f718dfaf347dcb5b983bfc87608144b0bad87970aebcbea5ce44d2a30c08e63"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.65",
+]
+
+[[package]]
+name = "typed-builder-macro"
+version = "0.19.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f9534daa9fd3ed0bd911d462a37f172228077e7abf18c18a5f67199d959205f8"
 dependencies = [
  "proc-macro2",
  "quote",
