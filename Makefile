@@ -113,8 +113,8 @@ clippy-wasm = $(cargo) +$(nightly) clippy --manifest-path $(wasm)/Cargo.toml --a
 
 # Need a separate command for benchmarks to prevent the "testing" feature flag from being activated
 clippy:
-	$(cargo) +$(nightly) clippy $(jobs) --all-targets --workspace --exclude namada_benchmarks -- -D warnings && \
-	$(cargo) +$(nightly) clippy $(jobs) --all-targets --package namada_benchmarks -- -D warnings && \
+	$(cargo) +$(nightly) clippy $(jobs) --all-targets --workspace --exclude namada_benchmarks -- -D warnings --check-cfg 'cfg(fuzzing)' && \
+	$(cargo) +$(nightly) clippy $(jobs) --all-targets --package namada_benchmarks -- -D warnings --check-cfg 'cfg(fuzzing)' && \
 	make -C $(wasms) clippy && \
 	make -C $(wasms_for_tests) clippy
 
@@ -271,6 +271,20 @@ clean:
 bench:
 	$(cargo) bench --package namada_benchmarks
 
+# NOTE: running in `--dev` as release build takes over 64GB memory, but 
+# dev is still configured for opt-level=3
+fuzz-txs-mempool:
+	$(cargo) +$(nightly) fuzz run txs_mempool --dev
+
+fuzz-txs-prepare-proposal:
+	$(cargo) +$(nightly) fuzz run txs_prepare_proposal --dev
+
+fuzz-txs-process-proposal:
+	$(cargo) +$(nightly) fuzz run txs_process_proposal --dev
+
+fuzz-txs-finalize-block:
+	$(cargo) +$(nightly) fuzz run txs_finalize_block --dev
+
 build-doc:
 	$(cargo) doc --no-deps
 
@@ -331,7 +345,7 @@ dev-deps:
 	$(rustup) toolchain install $(nightly)
 	$(rustup) target add wasm32-unknown-unknown
 	$(rustup) component add rustfmt clippy miri --toolchain $(nightly)
-	$(cargo) install cargo-watch unclog wasm-opt
+	$(cargo) install cargo-watch unclog wasm-opt cargo-fuzz
 
 test-miri:
 	$(cargo) +$(nightly) miri setup

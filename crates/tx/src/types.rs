@@ -13,7 +13,7 @@ use namada_core::account::AccountPublicKeysMap;
 use namada_core::address::Address;
 use namada_core::borsh::schema::{add_definition, Declaration, Definition};
 use namada_core::borsh::{
-    BorshDeserialize, BorshSchema, BorshSerialize, BorshSerializeExt,
+    self, BorshDeserialize, BorshSchema, BorshSerialize, BorshSerializeExt,
 };
 use namada_core::chain::ChainId;
 use namada_core::collections::{HashMap, HashSet};
@@ -48,6 +48,8 @@ pub enum VerifySigError {
     InvalidSectionSignature(String),
     #[error("The number of PKs overflows u8::MAX")]
     PksOverflow,
+    #[error("An expected signature is missing.")]
+    MissingSignature,
 }
 
 #[allow(missing_docs)]
@@ -216,6 +218,7 @@ pub fn verify_standalone_sig<T, S: Signable<T>>(
 }
 
 /// A section representing transaction data
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(
     Clone,
     Debug,
@@ -265,6 +268,7 @@ impl Data {
 pub struct CommitmentError;
 
 /// Represents either some code bytes or their SHA-256 hash
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(
     Clone,
     Debug,
@@ -331,6 +335,7 @@ impl Commitment {
 }
 
 /// A section representing transaction code
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(
     Clone,
     Debug,
@@ -403,6 +408,7 @@ impl Code {
 pub type Memo = Vec<u8>;
 
 /// Indicates the list of public keys against which signatures will be verified
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(
     Clone,
     Debug,
@@ -422,6 +428,7 @@ pub enum Signer {
 }
 
 /// A section representing a multisig over another section
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(
     Clone,
     Debug,
@@ -558,6 +565,7 @@ impl Authorization {
             // Verify the signatures against the subset of this section's public
             // keys that are also in the given map
             Signer::PubKeys(pks) => {
+                let hash = self.get_raw_hash();
                 for (idx, pk) in pks.iter().enumerate() {
                     if let Some(map_idx) =
                         public_keys_index_map.get_index_from_public_key(pk)
@@ -565,11 +573,11 @@ impl Authorization {
                         let sig_idx = u8::try_from(idx)
                             .map_err(|_| VerifySigError::PksOverflow)?;
                         consume_verify_sig_gas()?;
-                        common::SigScheme::verify_signature(
-                            pk,
-                            &self.get_raw_hash(),
-                            &self.signatures[&sig_idx],
-                        )?;
+                        let sig = self
+                            .signatures
+                            .get(&sig_idx)
+                            .ok_or(VerifySigError::MissingSignature)?;
+                        common::SigScheme::verify_signature(pk, &hash, sig)?;
                         verified_pks.insert(map_idx);
                         // Cannot overflow
                         #[allow(clippy::arithmetic_side_effects)]
@@ -752,8 +760,72 @@ impl MaspBuilder {
     }
 }
 
+#[cfg(feature = "arbitrary")]
+impl arbitrary::Arbitrary<'_> for MaspBuilder {
+    fn arbitrary(
+        u: &mut arbitrary::Unstructured<'_>,
+    ) -> arbitrary::Result<Self> {
+        use masp_primitives::transaction::builder::MapBuilder;
+        use masp_primitives::transaction::components::sapling::builder::MapBuilder as SapMapBuilder;
+        use masp_primitives::zip32::ExtendedSpendingKey;
+        struct WalletMap;
+
+        impl<P1>
+            SapMapBuilder<P1, ExtendedSpendingKey, (), ExtendedFullViewingKey>
+            for WalletMap
+        {
+            fn map_params(&self, _s: P1) {}
+
+            fn map_key(
+                &self,
+                s: ExtendedSpendingKey,
+            ) -> ExtendedFullViewingKey {
+                (&s).into()
+            }
+        }
+        impl<P1, N1>
+            MapBuilder<
+                P1,
+                ExtendedSpendingKey,
+                N1,
+                (),
+                ExtendedFullViewingKey,
+                (),
+            > for WalletMap
+        {
+            fn map_notifier(&self, _s: N1) {}
+        }
+
+        let target_height = masp_primitives::consensus::BlockHeight::from(
+            u.int_in_range(0_u32..=100_000_000)?,
+        );
+        Ok(MaspBuilder {
+            target: arbitrary::Arbitrary::arbitrary(u)?,
+            asset_types: arbitrary::Arbitrary::arbitrary(u)?,
+            metadata: arbitrary::Arbitrary::arbitrary(u)?,
+            builder: Builder::new(
+                masp_primitives::consensus::TestNetwork,
+                target_height,
+            )
+            .map_builder(WalletMap),
+        })
+    }
+
+    fn size_hint(depth: usize) -> (usize, Option<usize>) {
+        arbitrary::size_hint::and_all(
+                        &[
+                            <masp_primitives::consensus::BlockHeight as arbitrary::Arbitrary>::size_hint(depth),
+                            <TxId as arbitrary::Arbitrary>::size_hint(depth),
+                            <HashSet<AssetData> as arbitrary::Arbitrary>::size_hint(depth),
+                            <SaplingMetadata as arbitrary::Arbitrary>::size_hint(depth),
+                        ],
+                    )
+    }
+}
+
 /// A section of a transaction. Carries an independent piece of information
 /// necessary for the processing of a transaction.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(
     Clone,
     Debug,
@@ -891,6 +963,7 @@ impl Section {
 
 /// An inner transaction of the batch, represented by its commitments to the
 /// [`Code`], [`Data`] and [`Memo`] sections
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(
     Clone,
     Debug,
@@ -951,6 +1024,7 @@ impl TxCommitments {
 
 /// A Namada transaction header indicating where transaction subcomponents can
 /// be found
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(
     Clone,
     Debug,
@@ -1030,7 +1104,8 @@ pub enum TxError {
 }
 
 /// A Namada transaction is represented as a header followed by a series of
-/// seections providing additional details.
+/// sections providing additional details.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(
     Clone,
     Debug,
@@ -1315,6 +1390,20 @@ impl Tx {
         tx.encode(&mut bytes)
             .expect("encoding a transaction failed");
         bytes
+    }
+
+    /// Convert this transaction into protobufs bytes
+    pub fn try_to_bytes(&self) -> std::io::Result<Vec<u8>> {
+        use prost::Message;
+
+        let mut bytes = vec![];
+        let tx: proto::Tx = proto::Tx {
+            data: borsh::to_vec(self)?,
+        };
+        tx.encode(&mut bytes).map_err(|e| {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, e)
+        })?;
+        Ok(bytes)
     }
 
     /// Verify that the section with the given hash has been signed by the given
@@ -1803,8 +1892,8 @@ mod test {
     use std::collections::BTreeMap;
     use std::fs;
 
-    use borsh::schema::BorshSchema;
     use data_encoding::HEXLOWER;
+    use namada_core::borsh::schema::BorshSchema;
 
     use super::*;
 
