@@ -14,6 +14,7 @@ use core::time::Duration;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
+use borsh_ext::BorshSerializeExt;
 use color_eyre::eyre::Result;
 use eyre::eyre;
 use namada::core::address::{Address, InternalAddress};
@@ -55,10 +56,10 @@ use namada::ibc::core::connection::types::Counterparty as ConnCounterparty;
 use namada::ibc::core::host::types::identifiers::{
     ChainId, ChannelId, ClientId, ConnectionId, PortId,
 };
-use namada::ibc::event as ibc_events;
 use namada::ibc::event::IbcEventType;
 use namada::ibc::primitives::proto::Any;
-use namada::ibc::primitives::{Signer, ToProto};
+use namada::ibc::primitives::Signer;
+use namada::ibc::{event as ibc_events, IbcMessage};
 use namada::ledger::ibc::storage::*;
 use namada::ledger::parameters::{storage as param_storage, EpochDuration};
 use namada::ledger::pgf::ADDRESS as PGF_ADDRESS;
@@ -79,6 +80,7 @@ use namada_apps_lib::config::{ethereum_bridge, TendermintMode};
 use namada_apps_lib::facade::tendermint::block::Header as TmHeader;
 use namada_apps_lib::facade::tendermint::merkle::proof::ProofOps as TmProof;
 use namada_apps_lib::facade::tendermint_rpc::{Client, HttpClient, Url};
+use namada_core::ibc::core::handler::types::msgs::MsgEnvelope;
 use namada_core::string_encoding::StringEncoded;
 use namada_sdk::masp::fs::FsShieldedUtils;
 use namada_test_utils::TestWasms;
@@ -1125,7 +1127,7 @@ fn create_client(test_a: &Test, test_b: &Test) -> Result<(ClientId, ClientId)> {
     };
     let height_a = submit_ibc_tx(
         test_a,
-        make_ibc_data(message.to_any()),
+        &IbcMessage::Envelope(Box::new(MsgEnvelope::Client(message.into()))),
         ALBERT,
         ALBERT_KEY,
         false,
@@ -1141,7 +1143,7 @@ fn create_client(test_a: &Test, test_b: &Test) -> Result<(ClientId, ClientId)> {
     };
     let height_b = submit_ibc_tx(
         test_b,
-        make_ibc_data(message.to_any()),
+        &IbcMessage::Envelope(Box::new(MsgEnvelope::Client(message.into()))),
         ALBERT,
         ALBERT_KEY,
         false,
@@ -1274,7 +1276,7 @@ fn update_client(
     };
     submit_ibc_tx(
         target_test,
-        make_ibc_data(message.to_any()),
+        &IbcMessage::Envelope(Box::new(MsgEnvelope::Client(message.into()))),
         ALBERT,
         ALBERT_KEY,
         false,
@@ -1320,7 +1322,7 @@ fn connection_handshake(
     // OpenInitConnection on Chain A
     let height = submit_ibc_tx(
         test_a,
-        make_ibc_data(msg.to_any()),
+        &IbcMessage::Envelope(Box::new(MsgEnvelope::Connection(msg.into()))),
         ALBERT,
         ALBERT_KEY,
         false,
@@ -1360,7 +1362,7 @@ fn connection_handshake(
     // OpenTryConnection on Chain B
     let height = submit_ibc_tx(
         test_b,
-        make_ibc_data(msg.to_any()),
+        &IbcMessage::Envelope(Box::new(MsgEnvelope::Connection(msg.into()))),
         ALBERT,
         ALBERT_KEY,
         false,
@@ -1393,7 +1395,7 @@ fn connection_handshake(
     // OpenAckConnection on Chain A
     submit_ibc_tx(
         test_a,
-        make_ibc_data(msg.to_any()),
+        &IbcMessage::Envelope(Box::new(MsgEnvelope::Connection(msg.into()))),
         ALBERT,
         ALBERT_KEY,
         false,
@@ -1413,7 +1415,7 @@ fn connection_handshake(
     // OpenConfirmConnection on Chain B
     submit_ibc_tx(
         test_b,
-        make_ibc_data(msg.to_any()),
+        &IbcMessage::Envelope(Box::new(MsgEnvelope::Connection(msg.into()))),
         ALBERT,
         ALBERT_KEY,
         false,
@@ -1457,7 +1459,7 @@ fn channel_handshake(
     };
     let height = submit_ibc_tx(
         test_a,
-        make_ibc_data(msg.to_any()),
+        &IbcMessage::Envelope(Box::new(MsgEnvelope::Channel(msg.into()))),
         ALBERT,
         ALBERT_KEY,
         false,
@@ -1490,7 +1492,7 @@ fn channel_handshake(
     // OpenTryChannel on Chain B
     let height = submit_ibc_tx(
         test_b,
-        make_ibc_data(msg.to_any()),
+        &IbcMessage::Envelope(Box::new(MsgEnvelope::Channel(msg.into()))),
         ALBERT,
         ALBERT_KEY,
         false,
@@ -1517,7 +1519,7 @@ fn channel_handshake(
     // OpenAckChannel on Chain A
     submit_ibc_tx(
         test_a,
-        make_ibc_data(msg.to_any()),
+        &IbcMessage::Envelope(Box::new(MsgEnvelope::Channel(msg.into()))),
         ALBERT,
         ALBERT_KEY,
         false,
@@ -1539,7 +1541,7 @@ fn channel_handshake(
     // OpenConfirmChannel on Chain B
     submit_ibc_tx(
         test_b,
-        make_ibc_data(msg.to_any()),
+        &IbcMessage::Envelope(Box::new(MsgEnvelope::Channel(msg.into()))),
         ALBERT,
         ALBERT_KEY,
         false,
@@ -1639,7 +1641,7 @@ fn transfer_token(
     // Receive the token on Chain B
     let height = submit_ibc_tx(
         test_b,
-        make_ibc_data(msg.to_any()),
+        &IbcMessage::Envelope(Box::new(MsgEnvelope::Packet(msg.into()))),
         ALBERT,
         ALBERT_KEY,
         false,
@@ -1664,7 +1666,7 @@ fn transfer_token(
     // Acknowledge on Chain A
     submit_ibc_tx(
         test_a,
-        make_ibc_data(msg.to_any()),
+        &IbcMessage::Envelope(Box::new(MsgEnvelope::Packet(msg.into()))),
         ALBERT,
         ALBERT_KEY,
         false,
@@ -1800,7 +1802,7 @@ fn transfer_back(
     // Receive the token on Chain A
     let height = submit_ibc_tx(
         test_a,
-        make_ibc_data(msg.to_any()),
+        &IbcMessage::Envelope(Box::new(MsgEnvelope::Packet(msg.into()))),
         ALBERT,
         ALBERT_KEY,
         false,
@@ -1824,7 +1826,7 @@ fn transfer_back(
     // Acknowledge on Chain B
     submit_ibc_tx(
         test_b,
-        make_ibc_data(msg.to_any()),
+        &IbcMessage::Envelope(Box::new(MsgEnvelope::Packet(msg.into()))),
         ALBERT,
         ALBERT_KEY,
         false,
@@ -1879,7 +1881,7 @@ fn transfer_timeout(
     // Timeout on Chain A
     submit_ibc_tx(
         test_a,
-        make_ibc_data(msg.to_any()),
+        &IbcMessage::Envelope(Box::new(MsgEnvelope::Packet(msg.into()))),
         ALBERT,
         ALBERT_KEY,
         false,
@@ -1940,14 +1942,15 @@ fn commitment_prefix() -> CommitmentPrefix {
 
 fn submit_ibc_tx(
     test: &Test,
-    data: Vec<u8>,
+    data: &IbcMessage,
     owner: &str,
     signer: &str,
     wait_reveal_pk: bool,
 ) -> Result<u32> {
     std::env::set_var(ENV_VAR_CHAIN_ID, test.net.chain_id.to_string());
     let data_path = test.test_dir.path().join("tx.data");
-    std::fs::write(&data_path, data).expect("writing data failed");
+    std::fs::write(&data_path, data.serialize_to_vec())
+        .expect("writing data failed");
 
     let data_path = data_path.to_string_lossy();
     let rpc = get_actor_rpc(test, Who::Validator(0));
@@ -2289,13 +2292,6 @@ fn check_tx_height(test: &Test, client: &mut NamadaCmd) -> Result<u32> {
     }
 
     Ok(height)
-}
-
-fn make_ibc_data(message: Any) -> Vec<u8> {
-    let mut tx_data = vec![];
-    prost::Message::encode(&message, &mut tx_data)
-        .expect("encoding IBC message shouldn't fail");
-    tx_data
 }
 
 fn query_height(test: &Test) -> Result<Height> {
