@@ -517,7 +517,6 @@ impl<U: ShieldedUtils + MaybeSend + MaybeSync> ShieldedContext<U> {
         shutdown_signal: impl control_flow::ShutdownSignal,
         env: impl TaskEnvironment,
         config: ShieldedSyncConfig<M, T>,
-        start_query_height: Option<BlockHeight>,
         last_query_height: Option<BlockHeight>,
         sks: &[ExtendedSpendingKey],
         fvks: &[ViewingKey],
@@ -530,13 +529,7 @@ impl<U: ShieldedUtils + MaybeSend + MaybeSync> ShieldedContext<U> {
             let dispatcher = config.dispatcher(spawner, &self.utils).await;
 
             if let Some(updated_ctx) = dispatcher
-                .run(
-                    shutdown_signal,
-                    start_query_height,
-                    last_query_height,
-                    sks,
-                    fvks,
-                )
+                .run(shutdown_signal, last_query_height, sks, fvks)
                 .await?
             {
                 *self = updated_ctx;
