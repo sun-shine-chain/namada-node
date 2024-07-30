@@ -273,19 +273,19 @@ bench:
 # NOTE: running in `--dev` as release build takes over 64GB memory, but 
 # dev is still configured for opt-level=3
 fuzz-txs-mempool:
-	$(cargo) +$(nightly) fuzz run txs_mempool --dev
+	$(cargo) +$(nightly) fuzz run txs_mempool --dev -- --max_len=2000000
 
 fuzz-txs-prepare-proposal:
-	$(cargo) +$(nightly) fuzz run txs_prepare_proposal --dev
+	$(cargo) +$(nightly) fuzz run txs_prepare_proposal --dev -- --max_len=4000000
 
 fuzz-txs-process-proposal:
-	$(cargo) +$(nightly) fuzz run txs_process_proposal --dev
+	$(cargo) +$(nightly) fuzz run txs_process_proposal --dev -- --max_len=4000000
 
 fuzz-txs-finalize-block:
-	$(cargo) +$(nightly) fuzz run txs_finalize_block --dev
+	$(cargo) +$(nightly) fuzz run txs_finalize_block --dev -- --max_len=4000000
 
 fuzz-txs-wasm-run:
-	$(cargo) +$(nightly) fuzz run txs_wasm_run --dev
+	$(cargo) +$(nightly) fuzz run txs_wasm_run --dev -- --max_len=4000000
 
 build-doc:
 	$(cargo) doc --no-deps
