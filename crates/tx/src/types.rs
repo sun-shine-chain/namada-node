@@ -594,6 +594,14 @@ impl Authorization {
                 }
             }
         }
+
+        // There's usually not enough signatures when fuzzing, this makes it
+        // more likely to pass authorization.
+        #[cfg(fuzzing)]
+        {
+            verifications = 1;
+        }
+
         Ok(verifications)
     }
 }
