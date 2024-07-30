@@ -14,6 +14,7 @@ version.workspace = true
 
 [features]
 testing = ["proptest"]
+arbitrary = ["dep:arbitrary", "namada_core/arbitrary"]
 migrations = [
     "namada_migrations",
     "linkme",
@@ -28,6 +29,7 @@ namada_parameters = {path = "../parameters"}
 namada_storage = {path = "../storage"}
 namada_trans_token = {path = "../trans_token"}
 
+arbitrary = { workspace = true, optional = true }
 borsh.workspace = true
 itertools.workspace = true
 linkme = {workspace = true, optional = true}

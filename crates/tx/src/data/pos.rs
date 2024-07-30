@@ -11,6 +11,7 @@ use namada_migrations::*;
 use serde::{Deserialize, Serialize};
 
 /// A tx data type to become a validator account.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(
     Debug,
     Clone,

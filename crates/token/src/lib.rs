@@ -70,6 +70,7 @@ where
 }
 
 /// Accounts can send or receive funds in a transparent token transfer
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(
     Debug,
     Clone,
@@ -93,6 +94,7 @@ pub struct Account {
 }
 
 /// Arguments for a multi-party token transfer
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(
     Debug,
     Clone,

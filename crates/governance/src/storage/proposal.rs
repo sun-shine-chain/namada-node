@@ -29,6 +29,7 @@ pub enum ProposalError {
 }
 
 /// A tx data type to hold proposal data
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(
     Debug,
     Clone,
@@ -66,6 +67,7 @@ impl InitProposalData {
 }
 
 /// A tx data type to hold vote proposal data
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(
     Debug,
     Clone,
@@ -189,6 +191,7 @@ impl StoragePgfFunding {
 }
 
 /// The type of a Proposal
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(
     Debug,
     Clone,
@@ -216,6 +219,7 @@ pub enum ProposalType {
 }
 
 /// An add or remove action for PGF
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(
     Debug,
     Clone,
@@ -250,6 +254,7 @@ where
 }
 
 /// The target of a PGF payment
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(
     Debug,
     Clone,
@@ -304,6 +309,7 @@ impl Display for PGFTarget {
 }
 
 /// The target of a PGF payment
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(
     Debug,
     Clone,
@@ -327,6 +333,7 @@ pub struct PGFInternalTarget {
 }
 
 /// The target of a PGF payment
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(
     Debug,
     Clone,
@@ -345,8 +352,10 @@ pub struct PGFIbcTarget {
     /// The amount of token to fund the target address
     pub amount: Amount,
     /// Port ID to fund
+    #[cfg_attr(feature = "arbitrary", arbitrary(with = arb_ibc_port_id))]
     pub port_id: PortId,
     /// Channel ID to fund
+    #[cfg_attr(feature = "arbitrary", arbitrary(with = arb_ibc_channel_id))]
     pub channel_id: ChannelId,
 }
 
@@ -415,6 +424,7 @@ impl borsh::BorshSchema for PGFIbcTarget {
 }
 
 /// The actions that a PGF Steward can propose to execute
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(
     Debug,
     Clone,
@@ -651,6 +661,22 @@ impl Display for StorageProposal {
             self.activation_epoch
         )
     }
+}
+
+#[cfg(feature = "arbitrary")]
+fn arb_ibc_port_id(
+    u: &mut arbitrary::Unstructured<'_>,
+) -> arbitrary::Result<PortId> {
+    let inner: String = arbitrary::Arbitrary::arbitrary(u)?;
+    PortId::new(inner).map_err(|_| arbitrary::Error::IncorrectFormat)
+}
+
+#[cfg(feature = "arbitrary")]
+fn arb_ibc_channel_id(
+    u: &mut arbitrary::Unstructured<'_>,
+) -> arbitrary::Result<ChannelId> {
+    let inner: u64 = arbitrary::Arbitrary::arbitrary(u)?;
+    Ok(ChannelId::new(inner))
 }
 
 #[cfg(any(test, feature = "testing"))]

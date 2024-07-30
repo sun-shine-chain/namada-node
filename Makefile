@@ -284,6 +284,9 @@ fuzz-txs-process-proposal:
 fuzz-txs-finalize-block:
 	$(cargo) +$(nightly) fuzz run txs_finalize_block --dev
 
+fuzz-txs-wasm-run:
+	$(cargo) +$(nightly) fuzz run txs_wasm_run --dev
+
 build-doc:
 	$(cargo) doc --no-deps
 
