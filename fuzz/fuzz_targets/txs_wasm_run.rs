@@ -39,9 +39,11 @@ enum TxKind {
     Transfer(token::Transfer),
 }
 
-fuzz_target!(|kinds: Vec<TxKind>| run(kinds));
+fuzz_target!(|kinds: NonEmptyVec<TxKind>| run(kinds));
 
-fn run(kinds: Vec<TxKind>) {
+fn run(kinds: NonEmptyVec<TxKind>) {
+    let kinds = kinds.into_vec();
+
     let shell = unsafe {
         match SHELL.as_mut() {
             Some(shell) => shell,
@@ -147,4 +149,20 @@ fn run(kinds: Vec<TxKind>) {
 
     // Commit the block
     shell.commit();
+}
+
+#[derive(Arbitrary, Debug)]
+struct NonEmptyVec<T> {
+    // `vec` may be empty
+    vec: Vec<T>,
+    // there's always at least one element
+    last: T,
+}
+
+impl<T> NonEmptyVec<T> {
+    fn into_vec(self) -> Vec<T> {
+        let NonEmptyVec { mut vec, last } = self;
+        vec.push(last);
+        vec
+    }
 }
